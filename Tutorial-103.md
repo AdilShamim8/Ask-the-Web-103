@@ -1,6 +1,6 @@
 # Complete Tutorial: Build an "Ask-the-Web" Agent like Perplexity
 
-## The Most Beginner-Friendly, End-to-End, Deep Tutorial — DEFINITIVE VERSION | Part 1 of 2
+## The Most Beginner-Friendly, End-to-End, Deep Tutorial — DEFINITIVE VERSION |
 
 ---
 
@@ -11,7 +11,7 @@
 # Full Roadmap of Everything We Will Cover
 
 ```
-PART 1 (This Document)
+This Document
 │
 ├── 1. What is Perplexity? What are we building?
 ├── 2. Agents Overview
