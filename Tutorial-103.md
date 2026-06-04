@@ -1667,7 +1667,7 @@ They can now use that information to give much better answers!
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **A doctor WITHOUT tools:**
 - Can diagnose from symptoms alone
@@ -1764,7 +1764,7 @@ Think of it like a **job posting** for a worker:
 
 ---
 
-### 📝 Tool Definition Format (OpenAI Style):
+###  Tool Definition Format (OpenAI Style):
 
 ```python
 # This is how you define a tool for the LLM to use
@@ -1866,7 +1866,7 @@ ALL_TOOLS = [web_search_tool, calculator_tool, datetime_tool]
 
 ---
 
-### 🔑 Key Rules for Good Tool Descriptions:
+###  Key Rules for Good Tool Descriptions:
 
 ```
 1. Name should be clear and descriptive
@@ -2210,7 +2210,7 @@ MCP (Model Context Protocol) is a **standard way** for AI models to connect to t
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **Before USB (no standard):**
 - Every device had a DIFFERENT plug
@@ -2298,7 +2298,7 @@ Result: Build once, use everywhere
 
 ---
 
-### 💻 Simple MCP Server Example:
+###  Simple MCP Server Example:
 
 ```python
 # Simple MCP server concept
@@ -2475,7 +2475,7 @@ if __name__ == "__main__":
 
 ---
 
-### 🔑 Key MCP Concepts Summary:
+###  Key MCP Concepts Summary:
 
 | Concept | What it means |
 |---------|---------------|
@@ -2489,7 +2489,7 @@ if __name__ == "__main__":
 
 ---
 
-### ⚠️ MCP Failure Modes:
+###  MCP Failure Modes:
 
 ```
 1. Connection failures → Server goes down, agent crashes
@@ -2501,7 +2501,7 @@ if __name__ == "__main__":
 
 ---
 
-# 📊 CHAPTER SUMMARY — Part 1
+# CHAPTER SUMMARY — Part 1
 
 Let me summarize everything we learned in Part 1:
 
@@ -2547,13 +2547,13 @@ WHAT WE COVERED:
 
 ---
 
-# 🧠 CHAPTER 5: Multi-Step Agents
+#  CHAPTER 5: Multi-Step Agents
 
 ---
 
 ## What is a Multi-Step Agent?
 
-### 🔮 Prediction First:
+###  Prediction First:
 
 **What beginners think:**
 > "A multi-step agent just runs 3-4 tools in sequence."
@@ -2563,7 +2563,7 @@ WHAT WE COVERED:
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **A detective solving a case:**
 
@@ -2674,7 +2674,7 @@ After Step 1, agent sees data is from 2019 → Updates plan:
 
 ---
 
-### 💻 Code Example — Dynamic Planning:
+###  Code Example — Dynamic Planning:
 
 ```python
 import openai
@@ -2936,7 +2936,7 @@ It is the most important and widely-used framework for multi-step agents.
 
 ---
 
-### 🔮 Prediction First:
+###  Prediction First:
 
 **What beginners think:**
 > "ReACT means the agent reacts to user input."
@@ -2946,7 +2946,7 @@ It is the most important and widely-used framework for multi-step agents.
 
 ---
 
-### 🏠 Real-World Analogy:
+### Real-World Analogy:
 
 **A scientist running experiments:**
 
@@ -3013,7 +3013,7 @@ FINAL ANSWER: "Tokyo's population varies by definition:
 
 ---
 
-### 💻 ReACT Implementation:
+###  ReACT Implementation:
 
 ```python
 import openai
@@ -3310,7 +3310,7 @@ if __name__ == "__main__":
 
 ---
 
-### 📊 ReACT Output Trace (What it Looks Like):
+###  ReACT Output Trace (What it Looks Like):
 
 ```
 Question: "What are the top 3 AI companies by market cap in 2025?"
@@ -3377,7 +3377,7 @@ After each failed attempt, the agent **writes down what went wrong** and **store
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **A student with a failure diary:**
 
@@ -3396,7 +3396,7 @@ Third exam: Reads diary before starting
 
 ---
 
-### 📊 Reflexion Flow:
+###  Reflexion Flow:
 
 ```
 TASK GIVEN
@@ -3423,7 +3423,7 @@ DID IT SUCCEED?
 
 ---
 
-### 💻 Reflexion Implementation:
+###  Reflexion Implementation:
 
 ```python
 import openai
@@ -3720,7 +3720,7 @@ One trip!
 
 ---
 
-### 📊 ReWOO Architecture:
+###  ReWOO Architecture:
 
 ```
 PHASE 1: PLANNER (one LLM call)
@@ -3749,7 +3749,7 @@ Output: Final comprehensive answer
 
 ---
 
-### 💻 ReWOO Implementation:
+###  ReWOO Implementation:
 
 ```python
 import openai
@@ -4004,7 +4004,7 @@ Instead of following ONE path of thoughts and actions, the agent **explores mult
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **A chess player thinking ahead:**
 
@@ -4072,7 +4072,7 @@ Best path: Path 3 → Step 3a (score 9/10)
 
 ---
 
-### 💻 Tree of Thoughts Implementation:
+### Tree of Thoughts Implementation:
 
 ```python
 import openai
@@ -4330,7 +4330,7 @@ if __name__ == "__main__":
 
 ---
 
-### 📊 Comparison of Multi-Step Agent Approaches:
+### Comparison of Multi-Step Agent Approaches:
 
 ```
 ┌─────────────┬──────────┬──────────┬──────────┬──────────┐
@@ -4355,7 +4355,7 @@ if __name__ == "__main__":
 
 ---
 
-# 👥 CHAPTER 6: Multi-Agent Systems
+#  CHAPTER 6: Multi-Agent Systems
 
 ---
 
@@ -4366,7 +4366,7 @@ Multiple AI agents working together, each with specialized roles, communicating 
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **A hospital emergency room:**
 
@@ -4647,7 +4647,7 @@ Build once, work with everyone
 
 ---
 
-### 💻 A2A Communication Implementation:
+### A2A Communication Implementation:
 
 ```python
 import asyncio
@@ -5010,7 +5010,7 @@ if __name__ == "__main__":
 
 ---
 
-# 📊 CHAPTER 7: Agent Evaluation
+#  CHAPTER 7: Agent Evaluation
 
 ---
 
@@ -5028,7 +5028,7 @@ if __name__ == "__main__":
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 **Evaluating a student's research paper:**
 
@@ -5285,7 +5285,7 @@ Measures:
 
 ---
 
-### 💻 Complete Agent Evaluation System:
+###  Complete Agent Evaluation System:
 
 ```python
 import openai
@@ -5717,7 +5717,7 @@ if __name__ == "__main__":
 
 ---
 
-# 🏗️ CHAPTER 8: Complete Project Build
+#  CHAPTER 8: Complete Project Build
 
 ## The Full Perplexity-like Agent
 
@@ -6893,7 +6893,7 @@ cp .env.example .env  # Add your API keys
 streamlit run app.py
 ```
 
-## 🔧 Key Features
+## Key Features
 
 - ✅ Real-time web search with Tavily API
 - ✅ Multi-step ReACT reasoning
@@ -6902,7 +6902,7 @@ streamlit run app.py
 - ✅ Source verification display
 - ✅ Tool calling (search + calculation)
 
-## 📊 Technical Details
+##  Technical Details
 
 | Component | Technology |
 |-----------|-----------|
@@ -6912,7 +6912,7 @@ streamlit run app.py
 | UI | Streamlit |
 | Agent Patterns | Tool calling, routing, reflection |
 
-## 🎓 Concepts Demonstrated
+##  Concepts Demonstrated
 
 - AI Agents vs LLMs
 - ReACT framework implementation
@@ -6921,7 +6921,7 @@ streamlit run app.py
 - Agent evaluation metrics
 - MCP protocol concepts
 
-## 📸 Demo
+## Demo
 
 [Add screenshots or demo GIF here]
 ```
@@ -6990,7 +6990,7 @@ PART 2:
 
 ---
 
-## 🗺️ Interview Questions Master List:
+## Interview Questions Master List:
 
 ---
 
@@ -7044,7 +7044,7 @@ A: Evaluation has multiple dimensions:
 
 ---
 
-## 🏆 Final Engineer Mindset Checklist:
+##  Final Engineer Mindset Checklist:
 
 ```
 Before building an agent, ask yourself:
@@ -7065,7 +7065,7 @@ Before building an agent, ask yourself:
 
 ---
 
-## 🚀 How to Run Your Project:
+##  How to Run Your Project:
 
 ```bash
 # Step 1: Clone or create project folder
