@@ -35,7 +35,7 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 - [What Is This?](#-what-is-this)
 - [Key Features](#-key-features)
@@ -83,7 +83,7 @@
 
 ---
 
-## 🤔 What Is This?
+## What Is This?
 
 **Ask-the-Web Agent** is a production-ready AI research assistant that works
 like [Perplexity AI](https://perplexity.ai) — but fully open, self-hosted,
@@ -114,9 +114,9 @@ grounded in real-time web sources with inline citations.
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🧠 Five Agent Strategies
+###  Five Agent Strategies
 Choose automatically via smart routing or manually per request:
 - **ReACT** — Fast, iterative reason-and-act loops
 - **Reflexion** — ReACT + self-critique and automatic revision
@@ -124,31 +124,31 @@ Choose automatically via smart routing or manually per request:
 - **Orchestrator** — Decomposes complex queries into parallel sub-agents
 - **Tree Search** — Explores multiple reasoning paths, picks the best
 
-### 🔧 Production Tool Stack
+###  Production Tool Stack
 - **Web Search** — Tavily (primary) or SerpAPI (fallback)
 - **Web Scraper** — Playwright + BeautifulSoup, cleans boilerplate
 - **Calculator** — Safe sandboxed math expression evaluator
 - **Summarizer** — Condenses long scraped content
 - **MCP Support** — Connect any Model Context Protocol server
 
-### 🌐 Multi-Agent Coordination
+###  Multi-Agent Coordination
 - **Orchestrator-Worker** — Spawn N parallel specialist agents
 - **A2A Protocol** — Agent-to-Agent HTTP communication standard
 - **MultiAgentCoordinator** — Route tasks to registered specialist agents
 
-### ⚡ API & Streaming
+###  API & Streaming
 - **REST API** — FastAPI with full OpenAPI docs
 - **SSE Streaming** — Token-by-token answer delivery
 - **Redis Cache** — SHA256-keyed response caching (1hr TTL)
 - **Rate Limiting** — Per-IP sliding window
 
-### 📊 Evaluation System
+###  Evaluation System
 - **LLM-as-Judge** — Multi-dimensional answer quality scoring
 - **Text Metrics** — Citation coverage, structure, length (no LLM cost)
 - **Benchmark Suite** — 5 built-in test cases across categories
 - **Parallel Voting** — Majority-vote answer verification
 
-### 🏭 Production Infrastructure
+###  Production Infrastructure
 - **Structured logging** — structlog + rich, JSON in production
 - **Prometheus metrics** — `/metrics` endpoint
 - **Docker + Compose** — One-command deployment
@@ -158,7 +158,7 @@ Choose automatically via smart routing or manually per request:
 
 ---
 
-## 🏗 Architecture
+##  Architecture
 
 ### System Overview
 
@@ -339,7 +339,7 @@ ask_the_web_agent/
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -362,7 +362,7 @@ ask_the_web_agent/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourorg/ask-the-web-agent.git
+git https://github.com/AdilShamim8/Ask-the-Web-103.git
 cd ask-the-web-agent
 
 # 2. Create and activate a virtual environment
@@ -382,7 +382,7 @@ python -c "import openai, fastapi, redis; print('✅ All dependencies OK')"
 #### Option B — Docker (production)
 
 ```bash
-git clone https://github.com/yourorg/ask-the-web-agent.git
+git clone https://github.com/AdilShamim8/Ask-the-Web-103.git
 cd ask-the-web-agent
 cp .env.example .env
 # Edit .env with your API keys
@@ -507,7 +507,7 @@ Services started by `docker-compose up`:
 
 ---
 
-## 🤖 Agent Types
+## Agent Types
 
 The system supports five distinct agent strategies. The `auto` mode
 uses the smart router to pick the right one automatically.
@@ -777,7 +777,7 @@ Or just use `"agent_type": "auto"` and let the router decide.
 
 ---
 
-## 🔄 Workflows
+## Workflows
 
 Workflows are reusable reasoning patterns that agents are built from.
 You can use them directly or compose them into custom agents.
@@ -877,7 +877,7 @@ print(result["rounds"])           # list of {critique, revised_answer}
 
 ---
 
-## 🔧 Tools
+## Tools
 
 ### Built-in Tools
 
@@ -980,7 +980,7 @@ agent = build_agent(AgentType.REACT, registry=registry)
 
 ---
 
-## 🤝 Multi-Agent Systems
+## Multi-Agent Systems
 
 ### Orchestrator-Worker Pattern
 
@@ -1285,7 +1285,7 @@ If `API_KEY` is not set, all requests are allowed (development mode).
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 All settings are loaded from environment variables via Pydantic Settings.
 Full reference:
@@ -1326,7 +1326,7 @@ SERPAPI_API_KEY=your-key
 
 ---
 
-## 📊 Evaluation
+## Evaluation
 
 ### Answer Quality Metrics
 
@@ -1418,7 +1418,7 @@ results = asyncio.run(runner.run_all(cases=custom_cases))
 
 ---
 
-## 🔍 Observability
+## Observability
 
 ### Structured Logging
 
@@ -1469,7 +1469,7 @@ Key metrics to monitor:
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Run the Full Test Suite
 
@@ -1531,7 +1531,7 @@ assert state.final_answer == "Mocked answer"
 
 ---
 
-## 🚢 Deployment
+## Deployment
 
 ### Production Checklist
 
@@ -1631,7 +1631,7 @@ spec:
 
 ---
 
-## 🗺 Roadmap
+## Roadmap
 
 ### v1.1 — Near-term
 - [ ] **Persistent memory** — Cross-session conversation history via Redis
@@ -1653,7 +1653,7 @@ spec:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please read this section before submitting.
 
