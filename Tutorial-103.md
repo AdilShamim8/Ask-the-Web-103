@@ -57,7 +57,7 @@ This Document
 
 ---
 
-# 🌟 CHAPTER 1: What Are We Building?
+# CHAPTER 1: What Are We Building?
 
 ---
 
@@ -65,7 +65,7 @@ This Document
 
 Let me explain this with a simple story.
 
-### 🔴 The Old Way (Before Perplexity):
+### The Old Way (Before Perplexity):
 
 Imagine you want to know:
 **"What is the best programming language to learn in 2025?"**
@@ -81,7 +81,7 @@ Imagine you want to know:
 
 ---
 
-### 🟢 The Perplexity Way:
+### The Perplexity Way:
 
 **Step 1:** You ask: *"What is the best programming language to learn in 2025?"*
 **Step 2:** Perplexity:
@@ -129,13 +129,13 @@ USER GETS ANSWER ✅
 
 ---
 
-# 🧠 CHAPTER 2: Agents Overview
+# CHAPTER 2: Agents Overview
 
 ---
 
 ## 2.1 What is an AI Agent?
 
-### 🔮 Prediction First:
+### Prediction First:
 
 **What do most beginners think?**
 > "An agent is just a chatbot that answers questions."
@@ -145,7 +145,7 @@ USER GETS ANSWER ✅
 
 ---
 
-### 🏠 Real-World Analogy:
+### Real-World Analogy:
 
 Think about a **human assistant** at work:
 
@@ -169,7 +169,7 @@ Think about a **human assistant** at work:
 
 ---
 
-### 🔑 The 5 Core Properties of an Agent:
+### The 5 Core Properties of an Agent:
 
 ```
 1. PERCEPTION    → Can receive input (text, images, data)
@@ -185,13 +185,13 @@ This **loop** is what makes an agent powerful.
 
 ## 2.2 LLMs vs Agents vs Agentic Systems
 
-### 🟡 Very Important — Understand the Difference
+### Very Important — Understand the Difference
 
 Most beginners mix these three up. Let me explain each clearly.
 
 ---
 
-### 📦 Level 1: LLM (Large Language Model)
+### Level 1: LLM (Large Language Model)
 
 **What it is:**
 A very smart text prediction machine. It takes text in, produces text out.
@@ -215,7 +215,7 @@ LLM: "Paris"
 
 ---
 
-### 🤖 Level 2: Agent
+### Level 2: Agent
 
 **What it is:**
 An LLM **plus** the ability to use tools, remember things, and loop until a task is done.
@@ -244,7 +244,7 @@ AGENT:
 
 ---
 
-### 🏗️ Level 3: Agentic System
+### Level 3: Agentic System
 
 **What it is:**
 Multiple agents working together in a coordinated system, each with different roles, tools, and responsibilities.
@@ -269,7 +269,7 @@ USER GETS PERFECT ANSWER ✅
 
 ---
 
-### 📊 Comparison Table:
+### Comparison Table:
 
 | Feature | LLM | Agent | Agentic System |
 |---------|-----|-------|----------------|
@@ -301,7 +301,7 @@ Let me explain each level:
 
 ---
 
-### 🔴 Level 0: Pure LLM (No Agency)
+### Level 0: Pure LLM (No Agency)
 
 ```
 Input → LLM → Output
@@ -313,7 +313,7 @@ Input → LLM → Output
 
 ---
 
-### 🟠 Level 1: Fixed Workflow (Minimal Agency)
+### Level 1: Fixed Workflow (Minimal Agency)
 
 ```
 Input → Step 1 → Step 2 → Step 3 → Output
@@ -334,7 +334,7 @@ User Question
 
 ---
 
-### 🟡 Level 2: Routing (Some Agency)
+### Level 2: Routing (Some Agency)
 
 ```
 Input → LLM DECIDES ROUTE → Path A or Path B or Path C
@@ -355,7 +355,7 @@ User Question
 
 ---
 
-### 🟢 Level 3: Multi-Step Agent (Good Agency)
+### Level 3: Multi-Step Agent (Good Agency)
 
 ```
 Input → Plan → Act → Observe → Plan again → Act again → ...→ Output
@@ -370,7 +370,7 @@ The AI plans its own steps, uses tools, observes results, and decides what to do
 
 ---
 
-### 🔵 Level 4: Full Autonomous Agent (High Agency)
+### Level 4: Full Autonomous Agent (High Agency)
 
 The agent can:
 - Set its own sub-goals
@@ -385,7 +385,7 @@ The agent can:
 
 ---
 
-### 🟣 Level 5: Multi-Agent System (Maximum Agency)
+### Level 5: Multi-Agent System (Maximum Agency)
 
 Multiple specialized agents collaborate, check each other, and complete complex tasks.
 
@@ -396,7 +396,7 @@ Multiple specialized agents collaborate, check each other, and complete complex 
 
 ---
 
-### ⚠️ Key Engineering Lesson:
+### Key Engineering Lesson:
 
 > **Higher agency = more power BUT more risk and cost**
 
@@ -411,7 +411,7 @@ Complex task (autonomous coding) → Level 4-5
 
 ---
 
-# 🔄 CHAPTER 3: Workflows
+# CHAPTER 3: Workflows
 
 ---
 
@@ -448,7 +448,7 @@ Instead of asking one big complex question to an AI, you break the task into **s
 
 ---
 
-### 🏠 Real-World Analogy:
+### Real-World Analogy:
 
 **Making a hamburger in a factory:**
 
@@ -470,7 +470,7 @@ Each station does ONE job well. The output passes to the next station.
 
 ---
 
-### 📝 Simple Example — Research Paper Summary:
+### Simple Example — Research Paper Summary:
 
 **Without chaining (bad approach):**
 ```
@@ -509,7 +509,7 @@ Write a 3-sentence executive summary."
 
 ---
 
-### 💻 Code Example — Prompt Chaining:
+### Code Example — Prompt Chaining:
 
 ```python
 import openai
@@ -626,7 +626,7 @@ if __name__ == "__main__":
 
 ---
 
-### ✅ When to Use Prompt Chaining:
+### When to Use Prompt Chaining:
 
 | Situation | Use Chaining? |
 |-----------|---------------|
@@ -638,7 +638,7 @@ if __name__ == "__main__":
 
 ---
 
-### ❌ When Prompt Chaining Fails:
+### When Prompt Chaining Fails:
 
 1. **Error propagation** — If Step 1 makes a mistake, Step 2 and 3 will also be wrong (garbage in, garbage out)
 2. **Cost** — Each step = one API call = more money
@@ -658,7 +658,7 @@ Routing means an AI (or logic) looks at the input and decides **which path or sp
 
 ---
 
-### 🏠 Real-World Analogy:
+###  Real-World Analogy:
 
 Imagine you call a **hospital's reception desk:**
 
@@ -677,7 +677,7 @@ The receptionist is the **router**. She doesn't treat you herself. She decides *
 
 ---
 
-### 📝 In Our Perplexity Agent:
+### In Our Perplexity Agent:
 
 ```
 User asks a question
@@ -693,7 +693,7 @@ Is it AMBIGUOUS? → Go to: Clarification handler
 
 ---
 
-### 💻 Code Example — Routing:
+### Code Example — Routing:
 
 ```python
 import openai
@@ -843,7 +843,7 @@ if __name__ == "__main__":
 
 ---
 
-### ✅ Routing Best Practices:
+###  Routing Best Practices:
 
 ```
 1. Keep routes CLEAR and DISTINCT — no overlap
@@ -866,7 +866,7 @@ Instead of doing tasks one after another (sequential), you do multiple tasks **a
 
 ---
 
-### 🏠 Real-World Analogy:
+### Real-World Analogy:
 
 **Sequential (slow):**
 ```
@@ -935,7 +935,7 @@ This is like a **jury system** — multiple judges reduce the chance of one bad 
 
 ---
 
-### 💻 Code Example — Parallelization:
+### Code Example — Parallelization:
 
 ```python
 import asyncio
@@ -1131,7 +1131,7 @@ The agent generates an answer, then **looks at its own answer critically**, find
 
 ---
 
-### 🏠 Real-World Analogy:
+### Real-World Analogy:
 
 **A student writing an essay:**
 
@@ -1149,7 +1149,7 @@ This **self-checking loop** is reflection!
 
 ---
 
-### 📊 Reflection Flow Diagram:
+### Reflection Flow Diagram:
 
 ```
 User Question
@@ -1173,7 +1173,7 @@ REFLECT again... (loop)
 
 ---
 
-### 💻 Code Example — Reflection:
+### Code Example — Reflection:
 
 ```python
 import openai
@@ -1378,7 +1378,7 @@ One **Orchestrator** (manager) receives the big task, breaks it into subtasks, a
 
 ---
 
-### 🏠 Real-World Analogy:
+### Real-World Analogy:
 
 **A news magazine production:**
 
@@ -1403,7 +1403,7 @@ Final article published ✅
 
 ---
 
-### 📊 In Our Perplexity Agent:
+### In Our Perplexity Agent:
 
 ```
 USER: "Write a comprehensive report on AI trends in 2025"
@@ -1433,7 +1433,7 @@ Final comprehensive report ✅
 
 ---
 
-### 💻 Code Example — Orchestrator-Worker:
+### Code Example — Orchestrator-Worker:
 
 ```python
 import asyncio
@@ -1630,7 +1630,7 @@ if __name__ == "__main__":
 
 ---
 
-# 🔧 CHAPTER 4: Tools
+# CHAPTER 4: Tools
 
 ---
 
