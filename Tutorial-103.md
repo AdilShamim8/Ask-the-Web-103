@@ -1,10 +1,10 @@
-# Complete Tutorial: Build an "Ask-the-Web" Agent like Perplexity
+# Complete Tutorial Project 3: Build an "Ask-the-Web" Agent like Perplexity
 
 ## The Most Beginner-Friendly, End-to-End, Deep Tutorial — DEFINITIVE VERSION |
 
 ---
 
-> **What we are building:** An AI agent that can search the web, read results, think about them, and give you a smart answer with sources — just like Perplexity.ai does.
+> **What I am building:** An AI agent that can search the web, read results, think about them, and give you a smart answer with sources — just like Perplexity.ai does.
 
 ---
 
