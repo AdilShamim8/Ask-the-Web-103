@@ -1727,57 +1727,47 @@ class TestMyAgent:
 ```
 
 ---
+## License
 
-## 📄 License
-
-```
-MIT License
-
-Copyright (c) 2024 Ask-the-Web Agent Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining
-a copy of this software and associated documentation files (the
-"Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish,
-distribute, sublicense, and/or sell copies of the Software, and to
-permit persons to whom the Software is furnished to do so, subject to
-the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
-BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgements
+## Contact
 
-This project is built on the shoulders of excellent research and open-source work:
-
-| Work | Authors | How we use it |
-|---|---|---|
-| [ReACT](https://arxiv.org/abs/2210.03629) | Yao et al., 2022 | Core reasoning loop |
-| [Reflexion](https://arxiv.org/abs/2303.11366) | Shinn et al., 2023 | Self-critique pattern |
-| [ReWOO](https://arxiv.org/abs/2305.18323) | Xu et al., 2023 | Plan-execute-solve |
-| [MCP Protocol](https://modelcontextprotocol.io) | Anthropic | Tool interoperability |
-| [A2A Protocol](https://google.github.io/A2A/) | Google | Agent communication |
-| [Tavily](https://tavily.com) | Tavily AI | Web search API |
-| [FastAPI](https://fastapi.tiangolo.com) | Sebastián Ramírez | REST API framework |
+- Website: [Adil Shamim](https://adilshamim.me/)
+- GitHub: [Adil Shamim](https://github.com/AdilShamim8)
+- Create an issue in this repository for questions or suggestions
 
 ---
 
+<p align="center">
+  <a href="https://github.com/AdilShamim8">
+    <img src="https://img.shields.io/badge/GitHub-AdilShamim8-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Profile"/>
+  </a>
+  <span style="opacity:.6">&nbsp;</span>
+
+  <a href="https://www.linkedin.com/in/adilshamim8">
+    <img src="https://img.shields.io/badge/LinkedIn-AdilShamim8-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn Profile"/>
+  </a>
+  <span style="opacity:.6">&nbsp;</span>
+
+  <a href="https://www.kaggle.com/adilshamim8">
+    <img src="https://img.shields.io/badge/Kaggle-AdilShamim8-20BEFF?style=for-the-badge&logo=kaggle&logoColor=white" alt="Kaggle Profile"/>
+  </a>
+  <span style="opacity:.6">&nbsp;</span>
+
+  <a href="https://x.com/adil_shamim8">
+    <img src="https://img.shields.io/badge/Twitter%2FX-@adil__shamim8-000000?style=for-the-badge&logo=x&logoColor=white" alt="Twitter/X Profile"/>
+  </a>
+  <span style="opacity:.6">&nbsp;</span>
+
+  <a href="https://adilshamim8.medium.com/">
+    <img src="https://img.shields.io/badge/Medium-AdilShamim8-12100E?style=for-the-badge&logo=medium&logoColor=white" alt="Medium Profile"/>
+  </a>
+</p>
 <div align="center">
-
-**Built with ❤️ for the AI engineering community**
-
-[⬆ Back to top](#-ask-the-web-agent)
+  
+⭐ **If you find this repository helpful, please consider giving it a star!** ⭐
 
 </div>
