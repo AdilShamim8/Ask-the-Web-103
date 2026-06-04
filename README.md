@@ -18,7 +18,7 @@
 
 > **Ask anything. The agent searches, reasons, verifies, and answers —**
 > **with full citations, streaming output, and production-grade reliability.**
-> ### To better understand this project, first visit this link for a visualization of the project and what we built: [Link](https://ask-the-web.space-z.ai/)
+> ### To better understand this project, first visit this link for a visualization of the project and what I built: [Link](https://ask-the-web.space-z.ai/)
 > ### Then, if you want to learn each topic in a tutorial format, read this file thoroughly: [Link](https://github.com/AdilShamim8/Ask-the-Web-103/blob/main/Tutorial-103.md)
 
 <br/>
