@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agents.a2a import AgentCard, TaskStatus
+from core.exceptions import A2AError
 from agents.a2a_coordinator import MultiAgentCoordinator
 from agents.a2a_server import A2ATaskStore, create_a2a_server
 
@@ -114,8 +115,11 @@ class TestA2AServerRoutes:
 
 class TestCoordinator:
     def test_unknown_capability_raises(self) -> None:
+        # B017: assert the SPECIFIC error, not a blind Exception —
+        # the latter would also pass if delegate raised e.g. a TypeError
+        # from a refactoring bug. Fixed 2026-10-16.
         coord = MultiAgentCoordinator()
-        with pytest.raises(Exception):
+        with pytest.raises(A2AError, match="No agent registered"):
             asyncio.get_event_loop().run_until_complete(
                 coord.delegate("nonexistent", {})
             )

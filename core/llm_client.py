@@ -124,7 +124,7 @@ class LLMClient:
         for candidate in self._candidates(provider):
             client, key = self._provider_client(candidate)
             if not self._has_key(key):
-                logger.debug("llm.skip_no_key", provider=candidate.value)
+                log.debug("llm.skip_no_key", provider=candidate.value)
                 continue
 
             try:
@@ -162,14 +162,14 @@ class LLMClient:
 
             except ProviderUnavailableError as exc:
                 # Breaker open for this provider — try the next one.
-                logger.warning("llm.breaker_open", provider=candidate.value)
+                log.warning("llm.breaker_open", provider=candidate.value)
                 last_error = exc
                 continue
             except Exception as exc:
                 from core.observability import LLM_PROVIDER_UP
 
                 LLM_PROVIDER_UP.labels(provider=candidate.value).set(0)
-                logger.warning(
+                log.warning(
                     "llm.provider_failed",
                     provider=candidate.value,
                     error=str(exc)[:200],
