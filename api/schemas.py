@@ -14,14 +14,14 @@ Changes vs 1.0:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class AgentTypeRequest(str, Enum):
+class AgentTypeRequest(StrEnum):
     REACT = "react"
     REFLEXION = "reflexion"
     ORCHESTRATOR = "orchestrator"

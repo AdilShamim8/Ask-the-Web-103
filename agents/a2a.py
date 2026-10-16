@@ -28,7 +28,7 @@ import asyncio
 import random
 import time
 import uuid
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -46,7 +46,7 @@ _breakers = BreakerRegistry()
 # ── Protocol Types ────────────────────────────────────────────────────────────
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     SUBMITTED = "submitted"
     WORKING = "working"
     COMPLETED = "completed"

@@ -13,7 +13,7 @@ Production rules:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from functools import lru_cache
 from typing import Literal
 
@@ -21,12 +21,12 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(StrEnum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
 
 
-class SearchProvider(str, Enum):
+class SearchProvider(StrEnum):
     TAVILY = "tavily"
     SERPAPI = "serpapi"
 

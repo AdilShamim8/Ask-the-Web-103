@@ -13,10 +13,10 @@ Design rules (production):
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     """Operational severity — drives alerting routing."""
 
     INFO = "info"          # expected, no action (e.g., tool returned no results)

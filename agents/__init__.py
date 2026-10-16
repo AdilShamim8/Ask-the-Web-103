@@ -11,7 +11,7 @@ Factory contract:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from functools import lru_cache
 from typing import Any
 
@@ -30,7 +30,7 @@ from tools.tool_executor import ToolExecutor
 from tools.tool_registry import ToolRegistry
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     REACT = "react"
     REFLEXION = "reflexion"
     ORCHESTRATOR = "orchestrator"
