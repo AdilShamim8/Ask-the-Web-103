@@ -6,7 +6,6 @@ Client HTTP transport is faked via httpx.MockTransport — no network.
 
 from __future__ import annotations
 
-import asyncio
 import json
 
 import pytest
@@ -14,9 +13,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from agents.a2a import AgentCard, TaskStatus
-from core.exceptions import A2AError
 from agents.a2a_coordinator import MultiAgentCoordinator
 from agents.a2a_server import A2ATaskStore, create_a2a_server
+from core.exceptions import A2AError
 
 
 def make_card(url: str = "http://testserver") -> AgentCard:
