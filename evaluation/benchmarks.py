@@ -92,6 +92,41 @@ class BenchmarkRunner:
         self._model = model
         self._evaluator = AnswerEvaluator(llm_client=LLMClient(), model=model)
 
+    # ── Dataset loading ────────────────────────────────────────────────
+
+    @staticmethod
+    def load_dataset(path: str | Path) -> list[BenchmarkCase]:
+        """
+        Load benchmark cases from a JSON dataset file.
+
+        Dataset format (see evaluation/datasets/golden_v1.json):
+        [{"id", "query", "ground_truth"?, "expected_keywords"?, "category"?}]
+        """
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(data, list) or not data:
+            raise ValueError(f"Dataset {path} must be a non-empty JSON array")
+        return [
+            BenchmarkCase(
+                id=c["id"],
+                query=c["query"],
+                ground_truth=c.get("ground_truth"),
+                expected_keywords=c.get("expected_keywords", []),
+                category=c.get("category", "general"),
+            )
+            for c in data
+        ]
+
+    @staticmethod
+    def default_dataset() -> list[BenchmarkCase]:
+        """Golden dataset shipped with the repo (golden_v1.json)."""
+        path = Path(__file__).parent / "datasets" / "golden_v1.json"
+        if path.exists():
+            try:
+                return BenchmarkRunner.load_dataset(path)
+            except (ValueError, json.JSONDecodeError, KeyError):
+                logger.warning("benchmark.golden_dataset_invalid", path=str(path))
+        return BenchmarkRunner.DEFAULT_CASES
+
     async def run_case(self, case: BenchmarkCase) -> BenchmarkResult:
         log = logger.bind(case_id=case.id, category=case.category)
         log.info("benchmark.case.start")
@@ -163,8 +198,8 @@ class BenchmarkRunner:
         cases: list[BenchmarkCase] | None = None,
         concurrency: int = 2,
     ) -> dict[str, Any]:
-        cases = cases or self.DEFAULT_CASES
-        sem = asyncio.Semaphore(concurrency)
+        cases = cases or self.default_dataset()
+        sem = asyncio.Semaphore(max(1, min(concurrency, 5)))
 
         async def _bounded(case: BenchmarkCase) -> BenchmarkResult:
             async with sem:
@@ -217,3 +252,49 @@ class BenchmarkRunner:
         )
 
         return summary
+
+    # ── CI gate mode ───────────────────────────────────────────────────
+
+    _CI_PASS_RATE = 0.70   # release gate
+    _CI_AVG_SCORE = 0.65
+
+    async def run_ci_gate(
+        self,
+        cases: list[BenchmarkCase] | None = None,
+        *,
+        min_pass_rate: float | None = None,
+        min_avg_score: float | None = None,
+    ) -> int:
+        """
+        CI quality gate (used by .github/workflows/ci.yml).
+
+        Runs the golden dataset and returns a process exit code:
+            0 = gate passed, 1 = quality regression.
+        Answer quality is a build artifact — a merge that drops the
+        golden-set pass rate below the gate does not ship (FM-15).
+        """
+        summary = await self.run_all(cases)
+        min_pass = min_pass_rate if min_pass_rate is not None else self._CI_PASS_RATE
+        min_avg = min_avg_score if min_avg_score is not None else self._CI_AVG_SCORE
+
+        failures = []
+        if summary["pass_rate"] < min_pass:
+            failures.append(
+                f"pass_rate {summary['pass_rate']} < {min_pass}"
+            )
+        if summary["avg_score"] < min_avg:
+            failures.append(
+                f"avg_score {summary['avg_score']} < {min_avg}"
+            )
+
+        if failures:
+            logger.error("benchmark.ci_gate_failed", failures=failures)
+            print("EVAL GATE FAILED:", "; ".join(failures))  # CI log visibility
+            return 1
+
+        logger.info("benchmark.ci_gate_passed")
+        print(
+            f"EVAL GATE PASSED: pass_rate={summary['pass_rate']}, "
+            f"avg_score={summary['avg_score']}"
+        )
+        return 0
