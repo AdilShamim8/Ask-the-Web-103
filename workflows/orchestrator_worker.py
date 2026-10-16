@@ -21,8 +21,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 
@@ -103,7 +104,7 @@ class OrchestratorWorker:
                     return await asyncio.wait_for(
                         worker(item, index), timeout=self._timeout
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     report.failures.append(f"worker {index}: timeout")
                     return f"__ERROR__ worker {index} timed out"
                 except Exception as exc:

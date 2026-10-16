@@ -9,12 +9,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from agents.a2a import AgentCard, A2ATask, TaskStatus
+from agents.a2a import AgentCard, TaskStatus
 from agents.a2a_coordinator import MultiAgentCoordinator
 from agents.a2a_server import A2ATaskStore, create_a2a_server
 

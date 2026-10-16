@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 from configs.settings import get_settings
 from core.exceptions import ScrapingError
 from tools.base_tool import BaseTool, ToolDefinition
-from tools.http_client import fetch_bytes_with_cap, get_http_client
+from tools.http_client import fetch_bytes_with_cap
 from tools.ssrf_guard import ensure_fetchable, validate_response_history
 
 logger = structlog.get_logger(__name__)

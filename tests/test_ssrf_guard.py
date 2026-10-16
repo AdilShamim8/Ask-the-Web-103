@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from core.exceptions import SSRFBlockedError
-from tools.ssrf_guard import ensure_fetchable, validate_url, URLCheck
+from tools.ssrf_guard import URLCheck, ensure_fetchable, validate_url
 
 
 class TestSchemeValidation:

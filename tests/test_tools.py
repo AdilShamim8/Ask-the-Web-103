@@ -11,9 +11,8 @@ from tools import build_default_registry
 from tools.calculator import CalculatorTool, _safe_eval
 from tools.tool_executor import ToolExecutor
 from tools.tool_registry import ToolRegistry
-from tools.web_search import WebSearchTool
 from tools.web_scraper import WebScraperTool
-
+from tools.web_search import WebSearchTool
 
 # ── Calculator ────────────────────────────────────────────────────────────────
 
@@ -28,7 +27,6 @@ class TestSafeEval:
         assert _safe_eval("2 ** 10") == 1024.0
 
     def test_math_functions(self) -> None:
-        import math
         assert abs(_safe_eval("sqrt(144)") - 12.0) < 1e-9
         assert abs(_safe_eval("sin(pi/2)") - 1.0) < 1e-9
         assert abs(_safe_eval("log(e)") - 1.0) < 1e-9

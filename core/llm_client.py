@@ -18,7 +18,8 @@ Production behavior (ADR-002):
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 from anthropic import AsyncAnthropic
@@ -186,9 +187,9 @@ class LLMClient:
         max_tokens: int,
         tracker: UsageTracker | None,
     ) -> Message:
-        from core.observability import LLM_CALLS, LLM_LATENCY
-
         import time as _time
+
+        from core.observability import LLM_CALLS, LLM_LATENCY
 
         start = _time.perf_counter()
         serialized = []
@@ -215,7 +216,7 @@ class LLMClient:
 
         try:
             response = await client.chat.completions.create(**kwargs)
-        except Exception as exc:
+        except Exception:
             LLM_CALLS.labels(provider="openai", model=model, outcome="error").inc()
             raise
 
@@ -263,9 +264,9 @@ class LLMClient:
         max_tokens: int,
         tracker: UsageTracker | None,
     ) -> Message:
-        from core.observability import LLM_CALLS, LLM_LATENCY
-
         import time as _time
+
+        from core.observability import LLM_CALLS, LLM_LATENCY
 
         start = _time.perf_counter()
         system_content = ""

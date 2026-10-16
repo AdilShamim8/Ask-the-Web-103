@@ -13,7 +13,6 @@ from fastapi import APIRouter
 
 from agents.a2a import AgentCapability, AgentCard
 from agents.a2a_server import create_a2a_server
-from api import dependencies as deps
 from tools.mcp_server import create_mcp_server
 
 

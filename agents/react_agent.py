@@ -24,11 +24,11 @@ import structlog
 
 from agents.base_agent import BaseAgent
 from core.exceptions import BudgetExceededError, MaxIterationsExceededError
+from core.llm_client import LLMClient
 from core.message_types import AgentState, Message, Role
 from core.observability import AGENT_RUNS
 from tools.tool_executor import ToolExecutor
 from tools.tool_registry import ToolRegistry
-from core.llm_client import LLMClient
 
 logger = structlog.get_logger(__name__)
 

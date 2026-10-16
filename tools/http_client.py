@@ -13,8 +13,6 @@ FastAPI lifespan shutdown hook (api/main.py). Tests get a stub via
 
 from __future__ import annotations
 
-from typing import Optional
-
 import httpx
 import structlog
 
@@ -22,7 +20,7 @@ from configs.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
-_client: Optional[httpx.AsyncClient] = None
+_client: httpx.AsyncClient | None = None
 
 
 def get_http_client() -> httpx.AsyncClient:
@@ -55,7 +53,7 @@ def get_http_client() -> httpx.AsyncClient:
     return _client
 
 
-def set_http_client(client: Optional[httpx.AsyncClient]) -> None:
+def set_http_client(client: httpx.AsyncClient | None) -> None:
     """Test seam: inject a mock/transport-backed client."""
     global _client
     _client = client

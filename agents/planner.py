@@ -22,7 +22,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any
 
 import structlog
 
@@ -47,7 +46,7 @@ class TaskSpec:
     id: str
     description: str
     dependencies: list[str] = field(default_factory=list)
-    sub_tasks: list["TaskSpec"] = field(default_factory=list)
+    sub_tasks: list[TaskSpec] = field(default_factory=list)
     assigned_agent: str = "react"
     estimated_complexity: int = 1  # 1-5 scale
     status: str = "pending"        # pending, running, done, failed

@@ -19,7 +19,6 @@ import json
 from typing import Any
 
 import structlog
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from configs.settings import SearchProvider, get_settings
 from core.exceptions import SearchError

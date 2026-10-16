@@ -120,7 +120,7 @@ class UsageInfo(BaseModel):
     output_tokens: int = 0
 
     @classmethod
-    def from_openai(cls, usage: Any) -> "UsageInfo":
+    def from_openai(cls, usage: Any) -> UsageInfo:
         if usage is None:
             return cls()
         return cls(
@@ -129,7 +129,7 @@ class UsageInfo(BaseModel):
         )
 
     @classmethod
-    def from_anthropic(cls, usage: Any) -> "UsageInfo":
+    def from_anthropic(cls, usage: Any) -> UsageInfo:
         if usage is None:
             return cls()
         return cls(

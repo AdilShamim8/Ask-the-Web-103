@@ -14,8 +14,8 @@ Key production fixes vs 1.0:
 
 from __future__ import annotations
 
-import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, Request
@@ -26,15 +26,15 @@ from api import dependencies as deps
 from api.cache import ResponseCache
 from api.schemas import (
     AgentTypeRequest,
+    BudgetInfoResponse,
     EvaluationRequest,
     EvaluationResponse,
+    HealthResponse,
     QueryRequest,
     QueryResponse,
     ReadinessResponse,
     SourceItem,
     UsageInfoResponse,
-    BudgetInfoResponse,
-    HealthResponse,
 )
 from core.llm_client import LLMClient
 from core.message_types import AgentState, Message, Role

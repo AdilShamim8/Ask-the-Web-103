@@ -98,8 +98,8 @@ def create_mcp_server(
                 tool_name = params.get("name", "")
                 arguments = params.get("arguments", {}) or {}
 
-                from core.message_types import ToolCall
                 from core.exceptions import ToolNotFoundError
+                from core.message_types import ToolCall
 
                 try:
                     call = ToolCall(

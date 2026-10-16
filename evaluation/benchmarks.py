@@ -10,8 +10,8 @@ from typing import Any
 import structlog
 
 from agents import AgentType, build_agent
-from evaluation.evaluator import AnswerEvaluator
 from core.llm_client import LLMClient
+from evaluation.evaluator import AnswerEvaluator
 
 logger = structlog.get_logger(__name__)
 

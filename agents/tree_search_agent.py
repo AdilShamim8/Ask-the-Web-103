@@ -86,7 +86,7 @@ class TreeNode:
     messages: list[Message]
     score: float = 0.5
     depth: int = 0
-    children: list["TreeNode"] = field(default_factory=list)
+    children: list[TreeNode] = field(default_factory=list)
     is_terminal: bool = False
     final_answer: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)

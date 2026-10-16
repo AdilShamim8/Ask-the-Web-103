@@ -39,7 +39,7 @@ class MultiAgentCoordinator:
     def __init__(self) -> None:
         self._agents: dict[str, A2AClient] = {}
 
-    def register_agent(self, capability: str, client: A2AClient) -> "MultiAgentCoordinator":
+    def register_agent(self, capability: str, client: A2AClient) -> MultiAgentCoordinator:
         self._agents[capability] = client
         logger.info(
             "multi_agent.registered",

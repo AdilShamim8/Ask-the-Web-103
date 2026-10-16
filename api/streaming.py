@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 
@@ -72,7 +73,7 @@ async def sse_stream(
                 producer_aiter.__anext__(), timeout=HEARTBEAT_INTERVAL_S
             )
             last_activity = now
-        except asyncio.TimeoutError:
+        except TimeoutError:
             yield sse_event("heartbeat", {"t": round(now, 2)})
             continue
         except StopAsyncIteration:

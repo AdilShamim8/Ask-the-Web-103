@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from agents import AgentType, build_agent
+from agents.orchestrator import OrchestratorAgent
 from agents.react_agent import ReACTAgent
 from agents.reflexion_agent import ReflexionAgent
-from agents.orchestrator import OrchestratorAgent
-from core.exceptions import MaxIterationsExceededError
 from core.llm_client import LLMClient
-from core.message_types import AgentState, Message, Role, ToolCall, ToolResult
+from core.message_types import Message, Role, ToolCall, ToolResult
 from tools import build_default_registry
 from tools.tool_executor import ToolExecutor
 

@@ -11,7 +11,7 @@ Key differences from the 1.0 suite:
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient

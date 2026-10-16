@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from agents.a2a import AgentCard, A2ATask, A2ATaskResult, TaskStatus
+from agents.a2a import A2ATask, A2ATaskResult, AgentCard, TaskStatus
 
 logger = structlog.get_logger(__name__)
 

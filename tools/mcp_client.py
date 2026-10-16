@@ -22,13 +22,11 @@ Production changes vs. the course version:
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-import httpx
 import structlog
 
 from core.exceptions import MCPError
@@ -242,14 +240,14 @@ class MCPRegistry:
     def __init__(self) -> None:
         self._servers: list[MCPServerConfig] = []
 
-    def add_server(self, config: MCPServerConfig) -> "MCPRegistry":
+    def add_server(self, config: MCPServerConfig) -> MCPRegistry:
         self._servers.append(config)
         return self
 
     async def build_registry(
         self,
-        base_registry: "ToolRegistry | None" = None,
-    ) -> "ToolRegistry":
+        base_registry: ToolRegistry | None = None,
+    ) -> ToolRegistry:
         from tools.tool_registry import ToolRegistry  # avoid circular import
 
         registry = base_registry or ToolRegistry()

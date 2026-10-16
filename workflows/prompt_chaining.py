@@ -18,8 +18,9 @@ Production hardening:
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -63,7 +64,7 @@ class PromptChain:
         self._budget = budget
         self._steps: list[ChainStep] = []
 
-    def add_step(self, step: ChainStep) -> "PromptChain":
+    def add_step(self, step: ChainStep) -> PromptChain:
         self._steps.append(step)
         return self  # fluent
 

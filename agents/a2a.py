@@ -31,7 +31,6 @@ import uuid
 from enum import Enum
 from typing import Any
 
-import httpx
 import structlog
 from pydantic import BaseModel, Field
 

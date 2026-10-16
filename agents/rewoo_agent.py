@@ -298,7 +298,7 @@ class ReWOOAgent(BaseAgent):
             if resolved is None:
                 step.failed = True
                 step.observation = json.dumps(
-                    {"error": f"skipped: evidence for dependencies missing"}
+                    {"error": "skipped: evidence for dependencies missing"}
                 )
                 continue
             step.resolved_args = resolved

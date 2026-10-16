@@ -16,7 +16,7 @@ Why four dimensions and not just max_iterations:
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -37,7 +37,7 @@ class BudgetConfig:
     deadline_s: float = 45.0
 
     @classmethod
-    def from_settings(cls) -> "BudgetConfig":
+    def from_settings(cls) -> BudgetConfig:
         """Build from application settings, so ops can tune via env vars."""
         from configs.settings import get_settings
 

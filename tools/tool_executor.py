@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any
 
 import structlog
 
@@ -29,7 +28,6 @@ from core.budgets import BudgetManager
 from core.exceptions import (
     BudgetExceededError,
     ToolExecutionError,
-    ToolTimeoutError,
     ToolValidationError,
 )
 from core.message_types import ToolCall, ToolResult
@@ -114,7 +112,7 @@ class ToolExecutor:
                     tool.execute(**arguments),
                     timeout=tool.timeout_s,
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             TOOL_CALLS.labels(tool=tool_call.name, outcome="timeout").inc()
             log.warning("tool.timeout", timeout_s=tool.timeout_s)
             result = self._error_result(

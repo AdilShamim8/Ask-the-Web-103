@@ -17,7 +17,7 @@ anywhere produce typed JSON with the request ID.
 from __future__ import annotations
 
 import contextlib
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import structlog
 from fastapi import FastAPI, Request
@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # MCP_SERVERS format: "name1=http://host:port,name2=http://host:port"
     mcp_servers = _parse_mcp_servers()
     if mcp_servers:
-        from tools.mcp_client import MCPClient, MCPRegistry, MCPServerConfig
+        from tools.mcp_client import MCPRegistry
 
         mcp_registry = MCPRegistry()
         for cfg in mcp_servers:

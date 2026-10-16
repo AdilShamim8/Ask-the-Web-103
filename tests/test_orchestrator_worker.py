@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from core.budgets import BudgetConfig, BudgetManager
 from workflows.orchestrator_worker import FanOutReport, OrchestratorWorker
 

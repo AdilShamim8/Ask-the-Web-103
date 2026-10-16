@@ -16,8 +16,9 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -75,7 +76,7 @@ class QueryRouter:
         self._routes: dict[str, Route] = {}
         self._classify_cache: dict[str, tuple[str, float]] = {}
 
-    def add_route(self, route: Route) -> "QueryRouter":
+    def add_route(self, route: Route) -> QueryRouter:
         self._routes[route.name] = route
         return self
 

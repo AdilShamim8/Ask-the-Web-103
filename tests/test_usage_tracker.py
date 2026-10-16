@@ -5,7 +5,6 @@ Usage/cost tracking tests — the accounting behind capacity-planning §3.
 from __future__ import annotations
 
 from core.usage_tracker import (
-    DEFAULT_PRICING,
     UsageReport,
     UsageTracker,
     estimate_cost_usd,
