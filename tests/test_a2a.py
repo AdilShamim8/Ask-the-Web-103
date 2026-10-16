@@ -114,15 +114,18 @@ class TestA2AServerRoutes:
 
 
 class TestCoordinator:
-    def test_unknown_capability_raises(self) -> None:
-        # B017: assert the SPECIFIC error, not a blind Exception —
-        # the latter would also pass if delegate raised e.g. a TypeError
-        # from a refactoring bug. Fixed 2026-10-16.
+    async def test_unknown_capability_raises(self) -> None:
+        # Two bugs fixed 2026-10-16:
+        # 1. B017: assert the SPECIFIC error, not a blind Exception.
+        # 2. The old sync body called the deprecated
+        #    asyncio.get_event_loop(), which raises RuntimeError on
+        #    py3.12 BEFORE delegate() ever runs — the blind Exception
+        #    assert swallowed that, so the test passed without ever
+        #    testing delegate. Now a plain async test under
+        #    asyncio_mode=auto.
         coord = MultiAgentCoordinator()
         with pytest.raises(A2AError, match="No agent registered"):
-            asyncio.get_event_loop().run_until_complete(
-                coord.delegate("nonexistent", {})
-            )
+            await coord.delegate("nonexistent", {})
 
     async def test_parallel_isolation(self) -> None:
         """
