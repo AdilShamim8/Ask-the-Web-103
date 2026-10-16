@@ -60,6 +60,22 @@ dev = [
     "types-beautifulsoup4",
 ]
 
+[tool.hatch.build.targets.wheel]
+# Flat layout: the importable top-level packages shipped in the wheel.
+# Without this table, hatchling's default heuristic searches for a
+# package named `ask_the_web_agent/`, finds nothing, and every install
+# (`pip install -e .[dev]` in CI, `pip install .` in the Docker builder
+# stage) dies at metadata-generation time. Fixed 2026-10-16.
+packages = [
+    "core",
+    "configs",
+    "tools",
+    "agents",
+    "workflows",
+    "api",
+    "evaluation",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
