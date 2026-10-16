@@ -1,16 +1,33 @@
+"""
+Web scraper — fetches and extracts readable text from public pages.
+
+Production guards (the course version had NONE of these):
+* SSRF guard on the requested URL AND on the post-redirect final URL
+  (FM-08) — blocks cloud metadata, internal ranges, localhost.
+* Streaming fetch with a hard byte cap — a hostile 2GB page costs us at
+  most max_response_bytes, not the full download (FM-09).
+* Content-Type allowlist — we are a TEXT reader; binaries are rejected
+  before parsing.
+* HTML parsing off the event loop (asyncio.to_thread) — BeautifulSoup on
+  a big page stalls the worker for everyone (FM-11).
+"""
+
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
 import structlog
 from bs4 import BeautifulSoup
 
 from configs.settings import get_settings
 from core.exceptions import ScrapingError
 from tools.base_tool import BaseTool, ToolDefinition
+from tools.http_client import fetch_bytes_with_cap, get_http_client
+from tools.ssrf_guard import ensure_fetchable, validate_response_history
 
 logger = structlog.get_logger(__name__)
 
@@ -18,14 +35,16 @@ _BLOCKED_DOMAINS = frozenset([
     "facebook.com", "instagram.com", "twitter.com", "x.com",
 ])
 
-_MAX_CONTENT_CHARS = 8000
+_MAX_CONTENT_CHARS = 8_000
+
+_ALLOWED_CONTENT_TYPES = ("text/html", "application/xhtml+xml", "text/plain")
 
 
 class WebScraperTool(BaseTool):
-    """
-    Fetches and extracts clean readable text from a web page URL.
-    Strips ads, navigation, scripts, and boilerplate.
-    """
+    """Fetch and extract clean readable text from a public web page."""
+
+    timeout_s = 20.0
+    cost_hint = "expensive"  # full page fetch + parse
 
     def __init__(self) -> None:
         self._settings = get_settings()
@@ -62,38 +81,45 @@ class WebScraperTool(BaseTool):
         extract_links: bool = False,
         **_: Any,
     ) -> str:
+        # ── Guard 1: SSRF on the requested URL ───────────────────────
+        ensure_fetchable(url)
+
         parsed = urlparse(url)
         domain = parsed.netloc.replace("www.", "")
-
         if domain in _BLOCKED_DOMAINS:
-            return f"Scraping blocked for domain: {domain}"
+            return json.dumps(
+                {"error": f"Scraping blocked for domain: {domain}"}
+            )
 
-        if parsed.scheme not in ("http", "https"):
-            raise ScrapingError(f"Invalid URL scheme: {parsed.scheme}")
+        logger.info("scrape_webpage.start", url=url[:120])
 
-        logger.info("scrape_webpage.start", url=url)
+        # ── Guard 2: streaming fetch with hard byte cap ──────────────
+        body, headers, status, final_url = await fetch_bytes_with_cap(
+            url,
+            max_bytes=self._settings.max_response_bytes,
+            timeout=self._settings.scrape_timeout,
+        )
 
-        try:
-            async with httpx.AsyncClient(
-                timeout=self._settings.scrape_timeout,
-                follow_redirects=True,
-                headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 (compatible; AskWebAgent/1.0; "
-                        "+https://github.com/example/ask-the-web)"
-                    )
-                },
-            ) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                html = resp.text
+        if status >= 400:
+            raise ScrapingError(f"HTTP {status} for {url}")
 
-        except httpx.HTTPStatusError as exc:
-            raise ScrapingError(f"HTTP {exc.response.status_code} for {url}") from exc
-        except httpx.RequestError as exc:
-            raise ScrapingError(f"Request failed for {url}: {exc}") from exc
+        # ── Guard 3: re-validate the FINAL URL after redirects ───────
+        # A redirect chain can bounce public → 169.254.169.254 (FM-08).
+        validate_response_history(final_url)
 
-        text, links = self._parse_html(html, url)
+        # ── Guard 4: content-type allowlist ──────────────────────────
+        content_type = (headers.get("content-type") or "").split(";")[0].strip().lower()
+        if content_type and content_type not in _ALLOWED_CONTENT_TYPES:
+            return json.dumps({
+                "error": f"Unsupported content type: {content_type}. "
+                         "Only HTML and plain text can be read.",
+                "url": url,
+            })
+
+        html = body.decode("utf-8", errors="replace")
+
+        # ── Guard 5: parse off the event loop ────────────────────────
+        text, links = await asyncio.to_thread(self._parse_html, html)
 
         result: dict[str, Any] = {
             "url": url,
@@ -101,29 +127,25 @@ class WebScraperTool(BaseTool):
             "content_length": len(text),
             "truncated": len(text) > _MAX_CONTENT_CHARS,
         }
-
         if extract_links:
             result["links"] = links[:20]
 
-        import json
         return json.dumps(result, indent=2)
 
-    def _parse_html(self, html: str, url: str) -> tuple[str, list[str]]:
+    def _parse_html(self, html: str) -> tuple[str, list[str]]:
+        """CPU-bound parsing — runs in a worker thread (FM-11)."""
         soup = BeautifulSoup(html, "lxml")
 
-        # Remove noise elements
         for tag in soup(["script", "style", "nav", "footer", "header",
                          "aside", "advertisement", "noscript", "iframe"]):
             tag.decompose()
 
-        # Extract links before cleaning
         links = [
             a.get("href", "")
             for a in soup.find_all("a", href=True)
             if a.get("href", "").startswith("http")
         ]
 
-        # Try to find main content
         main = (
             soup.find("main")
             or soup.find("article")
@@ -133,9 +155,5 @@ class WebScraperTool(BaseTool):
         )
 
         raw_text = main.get_text(separator="\n") if main else soup.get_text()
-
-        # Clean up whitespace
         lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
-        clean = "\n".join(lines)
-
-        return clean, links
+        return "\n".join(lines), links
