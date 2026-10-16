@@ -1,9 +1,24 @@
+"""
+Reflection Workflow — generate → critique → revise.
+
+Production hardening:
+* Fixes a private-attribute violation: the old version reached into
+  ``llm_client._settings`` for the token cap. It now takes ``max_tokens``
+  as a constructor parameter — dependency rules (ADR-001) apply to
+  workflows too.
+* Bounded rounds with budget integration: each critique+revise cycle
+  consumes a budget step. A model that keeps finding "issues" forever
+  now terminates via ADR-005 instead of looping until max_iterations.
+* Early exit on "no issues found" — the common case for good answers.
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
 import structlog
 
+from core.budgets import BudgetManager
 from core.llm_client import LLMClient
 from core.message_types import Message, Role
 
@@ -36,10 +51,10 @@ class ReflectionWorkflow:
     Can be used as a post-processing step on any generated text.
 
     Steps:
-        1. Generate initial answer
+        1. Generate initial answer (done by caller)
         2. Self-critique the answer
         3. Revise the answer based on critique
-        4. Optionally repeat for `rounds` iterations
+        4. Repeat for ``rounds`` iterations (budget-bounded)
     """
 
     def __init__(
@@ -47,10 +62,15 @@ class ReflectionWorkflow:
         llm_client: LLMClient,
         model: str | None = None,
         rounds: int = 1,
+        *,
+        max_tokens: int = 4096,
+        budget: BudgetManager | None = None,
     ) -> None:
         self._llm = llm_client
         self._model = model
-        self._rounds = rounds
+        self._rounds = max(1, min(rounds, 5))  # hard cap: reflection is $$$
+        self._max_tokens = max_tokens
+        self._budget = budget
 
     async def run(
         self,
@@ -68,9 +88,12 @@ class ReflectionWorkflow:
         history: list[dict[str, str]] = []
 
         for round_num in range(self._rounds):
+            if self._budget is not None:
+                self._budget.consume_step()
+
             logger.debug("reflection.round", n=round_num + 1)
 
-            # Step 1: Critique
+            # Step 1: Critique (fast tier — it's a checklist, not prose)
             critique_response = await self._llm.complete(
                 messages=[
                     Message(
@@ -83,6 +106,8 @@ class ReflectionWorkflow:
                 model=self._model,
                 temperature=0.0,
                 max_tokens=512,
+                fast=True,
+                budget=self._budget,
             )
             critique = critique_response.content or ""
 
@@ -91,7 +116,7 @@ class ReflectionWorkflow:
                 history.append({"critique": critique, "revised_answer": answer})
                 break
 
-            # Step 2: Improve
+            # Step 2: Improve (default tier — user-facing prose)
             improve_response = await self._llm.complete(
                 messages=[
                     Message(
@@ -105,7 +130,8 @@ class ReflectionWorkflow:
                 ],
                 model=self._model,
                 temperature=0.1,
-                max_tokens=self._llm._settings.max_tokens_per_response,
+                max_tokens=self._max_tokens,
+                budget=self._budget,
             )
             answer = improve_response.content or answer
             history.append({"critique": critique, "revised_answer": answer})
