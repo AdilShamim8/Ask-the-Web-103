@@ -94,8 +94,12 @@ class WebSearchTool(BaseTool):
             try:
                 breaker = _breakers.get_or_create(f"search:{provider.value}")
 
-                async def _do_search() -> list[dict[str, str]]:
-                    if provider == SearchProvider.TAVILY:
+                # Snapshot the loop variable (B023): same fix as the
+                # LLM fallback chain — bind by value, not by closure.
+                async def _do_search(
+                    _provider: SearchProvider = provider,
+                ) -> list[dict[str, str]]:
+                    if _provider == SearchProvider.TAVILY:
                         return await self._tavily_search(
                             query, num_results, search_depth
                         )
