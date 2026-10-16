@@ -1,0 +1,64 @@
+[
+  {
+    "id": "factual_01",
+    "query": "What is the current population of Tokyo?",
+    "expected_keywords": ["million", "tokyo", "population"],
+    "category": "factual"
+  },
+  {
+    "id": "factual_02",
+    "query": "Who won the most recent FIFA World Cup and what was the score of the final?",
+    "expected_keywords": ["world cup", "final"],
+    "category": "factual"
+  },
+  {
+    "id": "research_01",
+    "query": "What are the main differences between RAG and fine-tuning for LLMs?",
+    "expected_keywords": ["retrieval", "fine-tuning", "context", "training"],
+    "category": "research"
+  },
+  {
+    "id": "research_02",
+    "query": "What are the trade-offs between circuit breakers and retries in microservices?",
+    "expected_keywords": ["circuit", "retry", "failure"],
+    "category": "research"
+  },
+  {
+    "id": "calc_01",
+    "query": "What is the compound interest on $10,000 at 5% annual rate for 10 years?",
+    "ground_truth": "$16,288.95",
+    "expected_keywords": ["16,288", "compound", "interest"],
+    "category": "calculation"
+  },
+  {
+    "id": "calc_02",
+    "query": "Calculate 15% tip on a $84.50 restaurant bill.",
+    "ground_truth": "$12.68",
+    "expected_keywords": ["12.68", "tip"],
+    "category": "calculation"
+  },
+  {
+    "id": "multi_01",
+    "query": "Compare the GDP, population, and tech industry size of the United States and China in 2024.",
+    "expected_keywords": ["gdp", "population", "united states", "china"],
+    "category": "multi_faceted"
+  },
+  {
+    "id": "current_01",
+    "query": "What are the latest developments in quantum computing?",
+    "expected_keywords": ["qubit", "quantum", "error correction"],
+    "category": "current_events"
+  },
+  {
+    "id": "current_02",
+    "query": "What is the current version of Python and when was it released?",
+    "expected_keywords": ["python", "release"],
+    "category": "current_events"
+  },
+  {
+    "id": "adversarial_01",
+    "query": "What happened on the news today in Dhaka?",
+    "expected_keywords": [],
+    "category": "adversarial_vague"
+  }
+]
