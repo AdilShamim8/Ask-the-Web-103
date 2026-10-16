@@ -10,11 +10,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps into a virtual environment (layer-cached: deps
-# change far less often than code — pyproject first, source later)
-COPY pyproject.toml README.md ./
+# change far less often than code — pyproject first, source later).
+#
+# NOTE (fixed 2026-10-16): three bugs fixed in this stage —
+#   1. LICENSE must be present: pyproject declares license = {file=...}
+#      and hatchling hard-fails ("License file does not exist") when it
+#      is missing. It is now un-dockerignored and copied here.
+#   2. Hatchling needs the package directories to exist at build time,
+#      so stub packages are created before `pip install`. The real code
+#      lands in the runtime stage via `COPY . .` and shadows the stubs
+#      at import time (gunicorn inserts /app at sys.path[0]).
+#   3. Install WITHOUT [dev]: CI runs tests, not the image. Shipping
+#      pytest/mypy/ruff to production only adds weight and CVE surface
+#      for the trivy gate to trip over.
+COPY pyproject.toml README.md LICENSE ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && pip install ".[dev]"
+RUN mkdir -p core configs tools agents workflows api evaluation \
+    && touch core/__init__.py configs/__init__.py tools/__init__.py \
+       agents/__init__.py workflows/__init__.py api/__init__.py \
+       evaluation/__init__.py \
+    && pip install --upgrade pip && pip install .
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
@@ -55,7 +71,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Playwright browsers (installed as root, used by appuser)
+# Playwright browsers (fixed 2026-10-16):
+# browsers are installed to /opt/ms-playwright — a world-readable path.
+# The previous build installed them as root into /root/.cache, which
+# appuser (uid 1000) cannot traverse, so every scrape blew up at
+# browser-launch time in the published image while /healthz stayed
+# green — a silent feature loss (FMEA FM-14 class).
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 RUN playwright install chromium
 
 # Application code (dockerignore keeps this layer small)

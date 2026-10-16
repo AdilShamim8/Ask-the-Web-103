@@ -11,8 +11,12 @@
 docs/
 *.md
 !README.md
-LICENSE
 Tutorial-103.md
+
+# NOTE (fixed 2026-10-16): LICENSE is no longer excluded. pyproject
+# declares license = { file = "LICENSE" } and hatchling hard-fails the
+# build with "License file does not exist" when it is missing from the
+# context — this silently broke every docker-build CI check.
 
 # Python artifacts
 __pycache__/
