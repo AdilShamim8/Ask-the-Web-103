@@ -135,7 +135,10 @@ class TestAskEndpoint:
         data = resp.json()
         assert data["answer"] == "Test answer."
         assert data["agent_type"] == "react"
-        assert data["api_version"] == "2.0"
+        # api_version must be the real release version (core.__version__),
+        # not a stale schema default — fixed 2026-10-16.
+        from core import __version__
+        assert data["api_version"] == __version__
 
     def test_ask_returns_usage_disclosure(self, client, monkeypatch):
         """ADR-05: responses disclose what the request consumed."""

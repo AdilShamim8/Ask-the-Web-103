@@ -13,6 +13,7 @@ from fastapi import APIRouter
 
 from agents.a2a import AgentCapability, AgentCard
 from agents.a2a_server import create_a2a_server
+from core import __version__
 from tools.mcp_server import create_mcp_server
 
 
@@ -25,7 +26,7 @@ def _agent_card() -> AgentCard:
             "Cite-grounded web research agent: searches, scrapes, "
             "calculates, and synthesizes answers."
         ),
-        version="2.0.0",
+        version=__version__,
         url="",  # filled at mount time from request base URL by callers
         capabilities=[
             AgentCapability(

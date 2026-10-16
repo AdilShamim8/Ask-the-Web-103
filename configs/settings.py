@@ -20,6 +20,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from core import __version__ as core_version
+
 
 class LLMProvider(StrEnum):
     OPENAI = "openai"
@@ -64,7 +66,7 @@ class Settings(BaseSettings):
     # ── App ──────────────────────────────────────────────────────────────
     app_env: Literal["development", "staging", "production"] = "development"
     log_level: str = "INFO"
-    api_version: str = "2.0.0"
+    api_version: str = core_version  # single source of truth: core.__version__
     max_agent_iterations: int = 10
     max_tokens_per_response: int = 4096
     context_window_limit: int = 120_000

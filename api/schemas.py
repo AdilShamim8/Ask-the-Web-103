@@ -20,6 +20,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from core import __version__
+
 
 class AgentTypeRequest(StrEnum):
     REACT = "react"
@@ -104,7 +106,7 @@ class QueryResponse(BaseModel):
     usage: UsageInfoResponse = Field(default_factory=UsageInfoResponse)
     budget: BudgetInfoResponse = Field(default_factory=BudgetInfoResponse)
     metadata: dict[str, Any] = Field(default_factory=dict)
-    api_version: str = "2.0"
+    api_version: str = __version__
 
 
 class StreamChunk(BaseModel):
