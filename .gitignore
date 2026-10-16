@@ -1,0 +1,89 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+pip-wheel-metadata/
+*.whl
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# ── Secrets & environment (NEVER commit real credentials) ────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets/
+credentials.json
+service-account*.json
+
+# ── Testing & coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# ── Type checking & linting ───────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ── Tooling ───────────────────────────────────────────────────────────────────
+# Playwright
+playwright-report/
+test-results/
+.blob-pages/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Runtime & data ────────────────────────────────────────────────────────────
+logs/
+*.log
+*.pid
+*.seed
+*.sqlite
+*.db
+dumps/
+.rdb
+
+# ── IDEs & editors ────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ── OS artifacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Local infrastructure state ────────────────────────────────────────────────
+docker-compose.override.yml
+.prometheus_data/
+.grafana_data/
