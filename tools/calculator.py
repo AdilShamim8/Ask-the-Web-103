@@ -33,9 +33,17 @@ def _safe_eval(expression: str) -> float:
     """
     Safely evaluate a mathematical expression.
     Only allows whitelisted functions and operators.
+
+    Guards: length cap (DoS via pathological parse trees), AST allowlist,
+    empty-builtins eval. No network, no imports, no attribute access.
     """
+    expression = expression.strip()
+    if not expression:
+        raise ToolExecutionError("calculator", "Empty expression")
+    if len(expression) > 1_000:
+        raise ToolExecutionError("calculator", "Expression exceeds 1000 characters")
     try:
-        tree = ast.parse(expression.strip(), mode="eval")
+        tree = ast.parse(expression, mode="eval")
     except SyntaxError as exc:
         raise ToolExecutionError("calculator", f"Syntax error: {exc}") from exc
 
@@ -58,6 +66,9 @@ def _safe_eval(expression: str) -> float:
 
 class CalculatorTool(BaseTool):
     """Safe mathematical expression evaluator."""
+
+    timeout_s = 5.0
+    cost_hint = "cheap"
 
     @property
     def definition(self) -> ToolDefinition:
