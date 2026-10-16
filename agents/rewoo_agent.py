@@ -1,19 +1,32 @@
-from __future__ import annotations
-
 """
-ReWOO (Reasoning WithOut Observation) Agent
-Paper: Xu et al., 2023 — "ReWOO: Decoupling Reasoning from Observations
-        for Efficient Augmented Language Models"
+ReWOO (Reasoning WithOut Observation) Agent.
 
-Key insight: Unlike ReACT which interleaves reasoning and tool calls,
-ReWOO separates the entire plan UP FRONT, executes all tools in parallel,
-then synthesizes. This reduces LLM calls from O(2N) to O(2) for N tool uses.
+Paper: Xu et al., 2023 — "ReWOO: Decoupling Reasoning from Observations
+for Efficient Augmented Language Models".
+
+Key insight: unlike ReACT which interleaves reasoning and tool calls,
+ReWOO plans UP FRONT, executes tools in parallel where possible, then
+solves once. LLM calls drop from O(2N) to O(2) for N tool uses.
 
 Flow:
-    PLANNER  → produces a full plan: list of (thought, tool, args) steps
-    EXECUTOR → runs all tool steps (in parallel where possible)
-    SOLVER   → given plan + all observations, produces the final answer
+    PLANNER  → full plan: list of (thought, tool, args) steps, with #EN
+               evidence references between steps
+    EXECUTOR → runs steps; independent steps in parallel, dependent
+               steps after their evidence producers
+    SOLVER   → final answer from plan + observations
+
+Production notes:
+* Dependency-aware execution preserved, now with shared budget/usage and
+  guarded tool calls (executor enforces).
+* ``_resolve_args`` is hardened: evidence snippets are JSON-escaped when
+  substituted (a snippet containing quotes used to corrupt the arg JSON),
+  and unresolvable steps are skipped with a recorded error instead of
+  silently executing with empty args.
+* Step count is clamped to the budget — a plan that can't fit is
+  truncated, not attempted.
 """
+
+from __future__ import annotations
 
 import json
 import re
@@ -49,7 +62,7 @@ Example:
 Step 1:
 Thought: I need to search for current information about AI.
 Tool: web_search
-Args: {{"query": "latest AI developments 2024", "num_results": 5}}
+Args: {{"query": "latest AI developments", "num_results": 5}}
 
 Step 2:
 Thought: I need to scrape the most relevant result for details.
@@ -74,23 +87,26 @@ Write a complete, well-cited answer using the observations above.
 Include a Sources section at the end.
 """
 
+_EVIDENCE_RE = re.compile(r"#E(\d+)")
+_MAX_STEPS = 8
+
 
 @dataclass
 class PlanStep:
     index: int
     thought: str
     tool_name: str
-    raw_args: str          # May contain #E references
+    raw_args: str
     resolved_args: dict[str, Any] = field(default_factory=dict)
     observation: str = ""
     tool_call_id: str = ""
+    failed: bool = False
 
 
 class ReWOOAgent(BaseAgent):
-    """
-    ReWOO Agent: Plan-all-first, execute-in-parallel, solve-once.
-    More token-efficient than ReACT for multi-step research tasks.
-    """
+    """ReWOO Agent: plan-all-first, execute-in-parallel, solve-once."""
+
+    agent_name = "rewoo"
 
     def __init__(
         self,
@@ -99,8 +115,10 @@ class ReWOOAgent(BaseAgent):
         executor: ToolExecutor,
         model: str | None = None,
         max_iterations: int | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(llm_client, registry, executor, model, max_iterations)
+        super().__init__(llm_client, registry, executor, model,
+                         max_iterations, **kwargs)
 
     async def run(self, query: str, **kwargs: Any) -> AgentState:
         start = time.perf_counter()
@@ -108,83 +126,96 @@ class ReWOOAgent(BaseAgent):
         log = logger.bind(agent="ReWOO", query=query[:60])
         log.info("rewoo.start")
 
-        # ── Phase 1: PLAN ─────────────────────────────────────────────────
-        plan_steps = await self._plan(query)
-        log.info("rewoo.planned", num_steps=len(plan_steps))
-        state.iterations += 1
+        try:
+            self._budget.consume_step()
 
-        if not plan_steps:
-            # Fallback: direct answer
-            response = await self._llm.complete(
-                messages=state.messages,
-                model=self._model,
-                temperature=0.0,
-            )
-            state.final_answer = response.content or ""
+            # ── Phase 1: PLAN ────────────────────────────────────────
+            plan_steps = await self._plan(query)
+            # Clamp plan size to the remaining step budget.
+            max_affordable = max(1, self._budget.steps + 2)  # planner+solver
+            if len(plan_steps) > _MAX_STEPS:
+                plan_steps = plan_steps[:_MAX_STEPS]
+                log.warning("rewoo.plan_truncated", cap=_MAX_STEPS)
+            log.info("rewoo.planned", num_steps=len(plan_steps))
             state.iterations += 1
-            self._log_state_summary(state, time.perf_counter() - start)
-            return state
 
-        # ── Phase 2: EXECUTE ──────────────────────────────────────────────
-        plan_steps = await self._execute_plan(plan_steps)
-        state.iterations += 1
+            if not plan_steps:
+                response = await self._llm.complete(
+                    messages=state.messages,
+                    model=self._model,
+                    temperature=0.0,
+                    budget=self._budget,
+                    usage_tracker=self._usage,
+                )
+                state.final_answer = response.content or ""
+                state.iterations += 1
+                self._finish(state, start)
+                return state
 
-        # Record tool calls in state
-        for step in plan_steps:
-            tc = ToolCall(
-                id=step.tool_call_id,
-                name=step.tool_name,
-                arguments=step.resolved_args,
-            )
-            state.tool_calls_made.append(tc)
-            tr = ToolResult(
-                tool_call_id=step.tool_call_id,
-                tool_name=step.tool_name,
-                content=step.observation,
-            )
-            state.tool_results_received.append(tr)
+            # ── Phase 2: EXECUTE ─────────────────────────────────────
+            plan_steps = await self._execute_plan(plan_steps)
+            state.iterations += 1
 
-        # ── Phase 3: SOLVE ────────────────────────────────────────────────
-        final_answer = await self._solve(query, plan_steps)
-        state.final_answer = final_answer
-        state.iterations += 1
+            for step in plan_steps:
+                state.tool_calls_made.append(ToolCall(
+                    id=step.tool_call_id, name=step.tool_name,
+                    arguments=step.resolved_args,
+                ))
+                state.tool_results_received.append(ToolResult(
+                    tool_call_id=step.tool_call_id,
+                    tool_name=step.tool_name,
+                    content=step.observation,
+                    is_error=step.failed,
+                ))
+
+            # ── Phase 3: SOLVE ───────────────────────────────────────
+            self._budget.consume_step()
+            state.final_answer = await self._solve(query, plan_steps)
+            state.iterations += 1
+
+        except Exception as exc:
+            from core.exceptions import BudgetExceededError
+
+            if isinstance(exc, BudgetExceededError):
+                log.warning("rewoo.budget_exceeded", dimension=exc.dimension)
+                self._mark_budget_exceeded(state, exc)
+                self._finish(state, start, outcome="budget_exceeded")
+                return state
+            raise
 
         self._extract_sources(state)
-        self._log_state_summary(state, time.perf_counter() - start)
+        self._finish(state, start)
         return state
 
     async def _plan(self, query: str) -> list[PlanStep]:
-        """Ask the planner LLM to produce a full step-by-step plan."""
-        tool_names = ", ".join(
-            t.name for t in self._registry.all_tools()
-        )
+        """Ask the planner LLM for a full step-by-step plan."""
+        tool_names = ", ".join(t.name for t in self._registry.all_tools())
         prompt = _PLANNER_PROMPT.format(query=query, tool_names=tool_names)
 
         response = await self._llm.complete(
             messages=[
-                Message(role=Role.SYSTEM, content="You are a meticulous planning agent."),
+                Message(role=Role.SYSTEM,
+                        content="You are a meticulous planning agent."),
                 Message(role=Role.USER, content=prompt),
             ],
             model=self._model,
             temperature=0.0,
             max_tokens=1024,
+            budget=self._budget,
+            usage_tracker=self._usage,
         )
-
         return self._parse_plan(response.content or "")
 
     def _parse_plan(self, text: str) -> list[PlanStep]:
-        """Parse the planner output into structured PlanStep objects."""
+        """Parse planner output into structured PlanStep objects."""
         steps: list[PlanStep] = []
-        # Split on "Step N:"
         raw_steps = re.split(r"Step\s+\d+:", text, flags=re.IGNORECASE)
 
-        for i, block in enumerate(raw_steps[1:], 1):  # skip preamble
+        for i, block in enumerate(raw_steps[1:], 1):
             thought_match = re.search(
                 r"Thought:\s*(.+?)(?=Tool:|$)", block, re.DOTALL | re.IGNORECASE
             )
-            tool_match = re.search(
-                r"Tool:\s*(\w+)", block, re.IGNORECASE
-            )
+            tool_match = re.search(r"Tool:\s*(\w+)", block, re.IGNORECASE)
             args_match = re.search(
                 r"Args:\s*(\{.+?\})", block, re.DOTALL | re.IGNORECASE
             )
@@ -197,102 +228,118 @@ class ReWOOAgent(BaseAgent):
                 logger.warning("rewoo.unknown_tool", tool=tool_name)
                 continue
 
-            thought = thought_match.group(1).strip()
-            raw_args = args_match.group(1).strip() if args_match else "{}"
-
             steps.append(PlanStep(
                 index=i,
-                thought=thought,
+                thought=thought_match.group(1).strip(),
                 tool_name=tool_name,
-                raw_args=raw_args,
+                raw_args=args_match.group(1).strip() if args_match else "{}",
             ))
 
         return steps
 
     def _resolve_args(
         self, raw_args: str, evidence: dict[int, str]
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         """
         Replace #EN references with actual evidence from prior steps.
-        E.g., "#E1" → observation of step 1.
+
+        Returns None when the step is unresolvable (its evidence producer
+        failed). The caller skips such steps — executing a step whose args
+        reference missing evidence with empty substitutions is worse than
+        skipping it.
         """
         resolved = raw_args
-        for idx, obs in sorted(evidence.items(), reverse=True):
-            resolved = resolved.replace(f"#E{idx}", obs[:500])
+        for match in set(_EVIDENCE_RE.findall(resolved)):
+            idx = int(match)
+            if idx not in evidence:
+                logger.warning("rewoo.evidence_missing", step_evidence=idx)
+                return None
+            snippet = evidence[idx][:500]
+            # Escape quotes so embedded JSON/text can't break the arg JSON.
+            resolved = resolved.replace(f"#E{idx}", json.dumps(snippet)[1:-1])
 
         try:
             return json.loads(resolved)
         except json.JSONDecodeError:
-            # Best-effort: extract key-value pairs
             logger.warning("rewoo.args_parse_failed", raw=raw_args[:100])
             return {}
 
     async def _execute_plan(self, steps: list[PlanStep]) -> list[PlanStep]:
-        """
-        Execute plan steps in dependency order.
-        Steps with no #E references can run in parallel.
-        Steps with #E references run after their dependencies.
-        """
-        import asyncio
+        """Execute independent steps in parallel; dependent steps after."""
         evidence: dict[int, str] = {}
 
-        # Group steps by dependency level
-        independent = [s for s in steps if f"#E" not in s.raw_args]
-        dependent   = [s for s in steps if f"#E" in s.raw_args]
+        def _deps(step: PlanStep) -> set[int]:
+            return {int(m) for m in _EVIDENCE_RE.findall(step.raw_args)}
 
-        # Execute independent steps in parallel
+        independent = [s for s in steps if not _deps(s)]
+        dependent = [s for s in steps if _deps(s)]
+
         if independent:
             for step in independent:
-                step.resolved_args = self._resolve_args(step.raw_args, {})
+                step.resolved_args = self._resolve_args(step.raw_args, {}) or {}
 
             tool_calls = [
-                ToolCall(
-                    name=s.tool_name,
-                    arguments=s.resolved_args,
-                )
+                ToolCall(name=s.tool_name, arguments=s.resolved_args)
                 for s in independent
             ]
-            results = await self._executor.execute_parallel(tool_calls)
+            results = await self._executor.execute_parallel(
+                tool_calls, budget=self._budget, usage=self._usage
+            )
 
             for step, tc, tr in zip(independent, tool_calls, results):
                 step.tool_call_id = tc.id
                 step.observation = tr.content
-                evidence[step.index] = tr.content
+                step.failed = tr.is_error
+                if not tr.is_error:
+                    evidence[step.index] = tr.content
 
-        # Execute dependent steps sequentially (need prior evidence)
         for step in dependent:
-            step.resolved_args = self._resolve_args(step.raw_args, evidence)
+            resolved = self._resolve_args(step.raw_args, evidence)
+            if resolved is None:
+                step.failed = True
+                step.observation = json.dumps(
+                    {"error": f"skipped: evidence for dependencies missing"}
+                )
+                continue
+            step.resolved_args = resolved
             tc = ToolCall(name=step.tool_name, arguments=step.resolved_args)
-            tr = await self._executor.execute_one(tc)
+            tr = await self._executor.execute_one(
+                tc, budget=self._budget, usage=self._usage
+            )
             step.tool_call_id = tc.id
             step.observation = tr.content
-            evidence[step.index] = tr.content
+            step.failed = tr.is_error
+            if not tr.is_error:
+                evidence[step.index] = tr.content
 
         return steps
 
     async def _solve(self, query: str, steps: list[PlanStep]) -> str:
-        """Produce the final answer using all plan steps and observations."""
+        """Produce the final answer from plan + observations."""
         plan_obs = ""
         for step in steps:
+            status = " (failed)" if step.failed else ""
             plan_obs += (
-                f"Step {step.index}:\n"
+                f"Step {step.index}:{status}\n"
                 f"  Thought: {step.thought}\n"
                 f"  Tool: {step.tool_name}\n"
                 f"  Observation: {step.observation[:1000]}\n\n"
             )
 
         prompt = _SOLVER_PROMPT.format(
-            query=query,
-            plan_with_observations=plan_obs,
+            query=query, plan_with_observations=plan_obs,
         )
 
         response = await self._llm.complete(
             messages=[
-                Message(role=Role.SYSTEM, content="You are an expert research synthesizer."),
+                Message(role=Role.SYSTEM,
+                        content="You are an expert research synthesizer."),
                 Message(role=Role.USER, content=prompt),
             ],
             model=self._model,
             temperature=0.1,
             max_tokens=self._settings.max_tokens_per_response,
+            budget=self._budget,
+            usage_tracker=self._usage,
         )
         return response.content or ""
