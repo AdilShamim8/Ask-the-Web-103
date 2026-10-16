@@ -1,5 +1,5 @@
 # ── Build stage ───────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ RUN mkdir -p core configs tools agents workflows api evaluation \
     && pip install --upgrade pip && pip install .
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 
