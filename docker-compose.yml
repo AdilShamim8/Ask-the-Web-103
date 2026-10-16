@@ -1,4 +1,7 @@
-version: "3.9"
+# Local development stack.
+# NOTE: the obsolete `version:` key is intentionally removed (Compose v2
+# spec deprecates it), and the prometheus volume mount now points at a
+# file that actually exists (configs/prometheus.yml, added 2026-10-16).
 
 services:
   redis:
@@ -24,7 +27,7 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      APP_ENV: production
+      APP_ENV: development
     depends_on:
       redis:
         condition: service_healthy
@@ -42,11 +45,13 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=7d"
+    depends_on:
+      - agent
 
 volumes:
   redis_data:
