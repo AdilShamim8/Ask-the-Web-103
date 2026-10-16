@@ -19,11 +19,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from pydantic import SecretStr
 
 from configs.settings import LLMProvider, get_settings
@@ -73,8 +74,11 @@ class LLMClient:
             return [provider]
         return self._provider_order
 
-    def _provider_client(self, provider: LLMProvider) -> tuple[Any, str]:
+    def _provider_client(self, provider: LLMProvider) -> tuple[Any, SecretStr]:
         """Return (client, api_key) or raise if the provider has no key."""
+        # NOTE (fixed 2026-10-16): the annotation claimed tuple[Any, str]
+        # while the values are SecretStr — the mismatch propagated a fake
+        # `str` type for `key` and made _has_key() type-check fail.
         if provider == LLMProvider.OPENAI:
             return self._openai, self._settings.openai_api_key
         return self._anthropic, self._settings.anthropic_api_key
@@ -361,7 +365,16 @@ class LLMClient:
         temperature: float = 0.0,
         max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
-        """Stream text tokens for final answer delivery (OpenAI transport)."""
+        """Stream text tokens for final answer delivery (OpenAI transport).
+
+        Fixed 2026-10-16: this used the high-level ``.stream()`` helper's
+        ``text_stream`` attribute — an openai-SDK-1.x convenience that was
+        REMOVED in the 3.x major (2026). Every call raised AttributeError
+        the moment the context manager was entered, so streaming answers
+        were silently dead. Rewritten on the classic chunked
+        ``create(stream=True)`` transport, which is stable across 1.x-3.x
+        and matches how _openai_complete talks to the SDK.
+        """
         model = model or self._settings.default_model
         max_tokens = max_tokens or self._settings.max_tokens_per_response
 
@@ -371,13 +384,21 @@ class LLMClient:
             if m.role != Role.TOOL or m.tool_results
         ]
 
-        async with self._openai.chat.completions.stream(
+        response = await self._openai.chat.completions.create(
             model=model,
-            messages=serialized,
+            # dict-serialized messages are accepted by the SDK at
+            # runtime; cast to the param type so the stream=True overload
+            # resolves (otherwise mypy falls back to the union return).
+            messages=cast(list[ChatCompletionMessageParam], serialized),
             temperature=temperature,
             max_tokens=max_tokens,
-        ) as stream:
-            async for text in stream.text_stream:
+            stream=True,
+        )
+        async for chunk in response:
+            if not chunk.choices:
+                continue
+            text = chunk.choices[0].delta.content
+            if text:
                 yield text
 
     # ── Health / introspection ───────────────────────────────────────────

@@ -40,8 +40,12 @@ class Settings(BaseSettings):
     )
 
     # ── LLM ──────────────────────────────────────────────────────────────
-    openai_api_key: SecretStr = Field(default="")
-    anthropic_api_key: SecretStr = Field(default="")
+    # NOTE (fixed 2026-10-16): defaults must be SecretStr(""), not "" —
+    # pydantic does NOT validate defaults, so a bare str default would
+    # surface as a raw str and crash .get_secret_value() in _has_key()
+    # whenever the env var is unset.
+    openai_api_key: SecretStr = Field(default=SecretStr(""))
+    anthropic_api_key: SecretStr = Field(default=SecretStr(""))
     default_llm_provider: LLMProvider = LLMProvider.OPENAI
     default_model: str = "gpt-4o"
     fast_model: str = "gpt-4o-mini"          # cheap tier: routing, tool selection
@@ -49,8 +53,8 @@ class Settings(BaseSettings):
     llm_provider_order_str: str = "openai,anthropic"  # ADR-002 fallback chain
 
     # ── Search (ADR-002: ordered fallback, not single choice) ───────────
-    tavily_api_key: SecretStr = Field(default="")
-    serpapi_api_key: SecretStr = Field(default="")
+    tavily_api_key: SecretStr = Field(default=SecretStr(""))
+    serpapi_api_key: SecretStr = Field(default=SecretStr(""))
     search_provider: SearchProvider = SearchProvider.TAVILY
     search_provider_order_str: str = "tavily,serpapi"
 
