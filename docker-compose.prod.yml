@@ -1,0 +1,70 @@
+# Production-shaped local stack: mirrors the K8s topology (app + redis
+# + metrics) with production-style settings. Use for pre-deploy checks:
+#   docker compose -f docker-compose.prod.yml up --build
+# Real production runs the deploy/k8s manifests.
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: .
+      target: runtime
+    environment:
+      APP_ENV: production
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      LOG_LEVEL: INFO
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 2g
+          cpus: "2.0"
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_prod_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    restart: unless-stopped
+
+  # On-call alerting (pairs with docs/RUNBOOK.md queries)
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+
+volumes:
+  redis_prod_data:
+  prometheus_prod_data:
