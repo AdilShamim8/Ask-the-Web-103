@@ -4,6 +4,24 @@ All notable changes to Ask-the-Web are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [SemVer](https://semver.org/).
 
+## [2.0.2] — 2026-10-16
+
+Patch release: final pre-production verification pass.
+
+### Changed
+- Production base image `python:3.11-slim` → `python:3.14-slim`
+  (PR #1, dependabot). `requires-python` (>=3.11) is unchanged and
+  compatible; the runtime tool purge from 2.0.1 is version-agnostic,
+  so the base bump required no Dockerfile logic changes.
+
+### Fixed — Deploy (self-found in final verification)
+- K8s manifest referenced a nonexistent image
+  `ghcr.io/adilshamim8/ask-the-web:latest`: wrong package name (the
+  published package is `ask-the-web-103`) and a `:latest` tag that
+  the publish workflow never emits (only `vX.Y.Z`, `X.Y`, `sha-*`).
+  Any real `kubectl apply` would have failed with ImagePullBackOff.
+  Now pinned to the published semver image.
+
 ## [2.0.1] — 2026-10-16
 
 Patch release: full CI/CD green-wall restoration plus a self-found

@@ -38,7 +38,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: api
-          image: ghcr.io/adilshamim8/ask-the-web:latest   # pinned by CI
+          image: ghcr.io/adilshamim8/ask-the-web-103:v2.0.2   # pinned semver; bump via PR + kubectl rollout restart
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
