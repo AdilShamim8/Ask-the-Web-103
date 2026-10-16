@@ -1,5 +1,20 @@
+"""
+Message and state types — the lingua franca between agents, workflows,
+tools, and providers.
+
+Production notes:
+* Serialization is pure and import-clean (the old version called
+  ``__import__("json")`` inside a method body — replaced with a module
+  import).
+* ``Message`` carries provider-agnostic structure for BOTH OpenAI and
+  Anthropic wire formats; provider quirks never leak above this layer.
+* ``AgentState`` now carries budget/usage snapshots so API responses can
+  report what a request actually consumed.
+"""
+
 from __future__ import annotations
 
+import json
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -25,6 +40,8 @@ class ToolResult(BaseModel):
     tool_name: str
     content: str
     is_error: bool = False
+    elapsed_s: float = 0.0
+    truncated: bool = False
 
 
 class Message(BaseModel):
@@ -34,10 +51,10 @@ class Message(BaseModel):
     tool_results: list[ToolResult] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # ── OpenAI wire format ───────────────────────────────────────────────
+
     def to_openai_dict(self) -> dict[str, Any]:
-        """Serialize to OpenAI API format."""
         if self.role == Role.TOOL and self.tool_results:
-            # OpenAI expects one message per tool result
             result = self.tool_results[0]
             return {
                 "role": "tool",
@@ -46,7 +63,6 @@ class Message(BaseModel):
             }
 
         msg: dict[str, Any] = {"role": self.role.value}
-
         if self.content:
             msg["content"] = self.content
 
@@ -57,16 +73,16 @@ class Message(BaseModel):
                     "type": "function",
                     "function": {
                         "name": tc.name,
-                        "arguments": __import__("json").dumps(tc.arguments),
+                        "arguments": json.dumps(tc.arguments),
                     },
                 }
                 for tc in self.tool_calls
             ]
-
         return msg
 
+    # ── Anthropic wire format ────────────────────────────────────────────
+
     def to_anthropic_dict(self) -> dict[str, Any]:
-        """Serialize to Anthropic API format."""
         if self.role == Role.TOOL and self.tool_results:
             return {
                 "role": "user",
@@ -82,7 +98,6 @@ class Message(BaseModel):
             }
 
         msg: dict[str, Any] = {"role": self.role.value}
-
         if self.tool_calls:
             msg["content"] = [
                 {
@@ -95,12 +110,36 @@ class Message(BaseModel):
             ]
         else:
             msg["content"] = self.content or ""
-
         return msg
 
 
+class UsageInfo(BaseModel):
+    """Token usage from a single completion (provider-normalized)."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    @classmethod
+    def from_openai(cls, usage: Any) -> "UsageInfo":
+        if usage is None:
+            return cls()
+        return cls(
+            input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+            output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+        )
+
+    @classmethod
+    def from_anthropic(cls, usage: Any) -> "UsageInfo":
+        if usage is None:
+            return cls()
+        return cls(
+            input_tokens=getattr(usage, "input_tokens", 0) or 0,
+            output_tokens=getattr(usage, "output_tokens", 0) or 0,
+        )
+
+
 class AgentState(BaseModel):
-    """Full mutable state carried through agent iterations."""
+    """Full state carried through agent iterations (one per request)."""
 
     query: str
     messages: list[Message] = Field(default_factory=list)
@@ -109,4 +148,6 @@ class AgentState(BaseModel):
     tool_results_received: list[ToolResult] = Field(default_factory=list)
     final_answer: str | None = None
     sources: list[dict[str, str]] = Field(default_factory=list)
+    degraded: bool = False                # answer produced under provider degradation
+    degradation_reasons: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
