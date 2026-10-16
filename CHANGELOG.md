@@ -15,12 +15,13 @@ Patch release: final pre-production verification pass.
   so the base bump required no Dockerfile logic changes.
 
 ### Fixed — Deploy (self-found in final verification)
-- K8s manifest referenced a nonexistent image
-  `ghcr.io/adilshamim8/ask-the-web:latest`: wrong package name (the
-  published package is `ask-the-web-103`) and a `:latest` tag that
-  the publish workflow never emits (only `vX.Y.Z`, `X.Y`, `sha-*`).
-  Any real `kubectl apply` would have failed with ImagePullBackOff.
-  Now pinned to the published semver image.
+- K8s manifest referenced `ghcr.io/adilshamim8/ask-the-web:latest` —
+  a package that does not exist (the published package is
+  `ask-the-web-103`), pinned to a floating `:latest`. Floating tags
+  are unsuitable for K8s: a rollout must never silently pick up a
+  different image than the one that was verified. Now pinned to the
+  exact semver image `ghcr.io/adilshamim8/ask-the-web-103:v2.0.2`
+  (build + boot smoke verified by Docker Publish).
 
 ## [2.0.1] — 2026-10-16
 
