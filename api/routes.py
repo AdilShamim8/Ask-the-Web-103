@@ -1,25 +1,41 @@
+"""
+API routes — the HTTP surface.
+
+Key production fixes vs 1.0:
+* ``/health`` no longer makes a PAID LLM CALL (the old check cost a
+  real completion on every probe — monitoring was our biggest source of
+  waste). Cheap liveness is process-level; deep checks live in /readyz.
+* ``/ask`` runs through singleflight get_or_compute (ADR-003) — cache
+  hits never recompute under load, misses compute exactly once.
+* Budgets/usage are request-scoped via dependencies and returned in the
+  response (cost transparency).
+* Streaming uses the heartbeat-guarded SSE wrapper (api/streaming.py).
+"""
+
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any, AsyncIterator
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from agents import AgentType, build_agent
+from agents import AgentType
+from api import dependencies as deps
 from api.cache import ResponseCache
 from api.schemas import (
     AgentTypeRequest,
     EvaluationRequest,
     EvaluationResponse,
-    HealthResponse,
     QueryRequest,
     QueryResponse,
+    ReadinessResponse,
     SourceItem,
+    UsageInfoResponse,
+    BudgetInfoResponse,
+    HealthResponse,
 )
-from configs.settings import get_settings
 from core.llm_client import LLMClient
 from core.message_types import AgentState, Message, Role
 from evaluation.evaluator import AnswerEvaluator
@@ -28,23 +44,9 @@ from workflows import build_routed_pipeline
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-# ── Dependency providers ──────────────────────────────────────────────────────
-
-_cache: ResponseCache | None = None
-
-
-def get_cache() -> ResponseCache:
-    global _cache
-    if _cache is None:
-        _cache = ResponseCache()
-    return _cache
-
-
-def get_evaluator() -> AnswerEvaluator:
-    return AnswerEvaluator(llm_client=LLMClient())
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _state_to_response(
     state: AgentState,
@@ -52,6 +54,8 @@ def _state_to_response(
     model: str,
     cached: bool = False,
 ) -> QueryResponse:
+    usage_meta = state.metadata.get("usage", {})
+    budget_meta = state.metadata.get("budget", {})
     return QueryResponse(
         query=state.query,
         answer=state.final_answer or "",
@@ -64,191 +68,240 @@ def _state_to_response(
         tools_called=[tc.name for tc in state.tool_calls_made],
         model=model,
         cached=cached,
-        metadata=state.metadata,
+        degraded=state.degraded,
+        degradation_reasons=state.degradation_reasons,
+        usage=UsageInfoResponse(
+            llm_calls=usage_meta.get("llm_calls", 0),
+            input_tokens=usage_meta.get("input_tokens", 0),
+            output_tokens=usage_meta.get("output_tokens", 0),
+            tool_calls=usage_meta.get("tool_calls", 0),
+            web_searches=usage_meta.get("web_searches", 0),
+            pages_fetched=usage_meta.get("pages_fetched", 0),
+            estimated_cost_usd=usage_meta.get("estimated_cost_usd", 0.0),
+        ),
+        budget=BudgetInfoResponse(**budget_meta) if budget_meta else BudgetInfoResponse(),
+        metadata={
+            k: v for k, v in state.metadata.items()
+            if k not in ("usage", "budget")
+        },
     )
 
 
-async def _run_agent(req: QueryRequest) -> tuple[AgentState, str]:
-    """Dispatch to the right agent/pipeline and return (state, agent_type_str)."""
+async def _run_agent(
+    req: QueryRequest,
+    request: Request,
+    factory,
+) -> tuple[AgentState, str]:
+    """Dispatch to the right agent/pipeline. Returns (state, agent_str)."""
+    from configs.settings import get_settings
+
     settings = get_settings()
     model = req.model or settings.default_model
 
     if req.agent_type == AgentTypeRequest.AUTO:
         state = await build_routed_pipeline(query=req.query, model=model)
-        agent_type_str = "auto"
-    else:
-        agent_map = {
-            AgentTypeRequest.REACT: AgentType.REACT,
-            AgentTypeRequest.REFLEXION: AgentType.REFLEXION,
-            AgentTypeRequest.ORCHESTRATOR: AgentType.ORCHESTRATOR,
-        }
-        agent = build_agent(
-            agent_type=agent_map[req.agent_type],
-            model=model,
-            max_iterations=req.max_iterations,
-        )
-        state = await agent.run(req.query)
-        agent_type_str = req.agent_type.value
+        return state, "auto"
 
-    return state, agent_type_str
+    agent_map = {
+        AgentTypeRequest.REACT: AgentType.REACT,
+        AgentTypeRequest.REFLEXION: AgentType.REFLEXION,
+        AgentTypeRequest.ORCHESTRATOR: AgentType.ORCHESTRATOR,
+    }
+    agent = factory(
+        agent_map[req.agent_type],
+        model=model,
+        max_iterations=req.max_iterations,
+    )
+    state = await agent.run(req.query)
+    return state, req.agent_type.value
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── System ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/health", response_model=HealthResponse, tags=["System"])
-async def health_check() -> HealthResponse:
-    """Service health check — verifies LLM provider availability."""
-    settings = get_settings()
-
-    providers: dict[str, bool] = {}
-
-    # Check OpenAI
-    try:
-        llm = LLMClient()
-        await llm.complete(
-            messages=[Message(role=Role.USER, content="ping")],
-            model="gpt-4o-mini",
-            max_tokens=5,
-        )
-        providers["openai"] = True
-    except Exception:
-        providers["openai"] = False
-
+@router.get("/healthz", response_model=HealthResponse, tags=["System"],
+            include_in_schema=False)
+async def health_check(request: Request) -> HealthResponse:
+    """
+    Liveness: is the process serving HTTP? CHEAP by contract —
+    no provider calls, no Redis round-trips. K8s liveness probes hit
+    this; it must never fail because a dependency is slow (that's what
+    readiness is for). Deep checks: /readyz.
+    """
+    settings = request.app.state.settings
     return HealthResponse(
-        status="ok" if any(providers.values()) else "degraded",
-        version="1.0.0",
-        providers=providers,
+        status="ok",
+        version=settings.api_version,
+        providers={},  # intentionally empty — see /readyz
     )
+
+
+@router.get("/readyz", response_model=ReadinessResponse, tags=["System"])
+async def readiness_check(request: Request) -> ReadinessResponse:
+    """
+    Readiness: should this pod receive traffic? Checks state
+    dependencies and the tool registry. A pod with a dead Redis still
+    reports ready=true (cache fails open) but flags it.
+    """
+    app = request.app
+    settings = app.state.settings
+
+    redis_ok = True
+    try:
+        if app.state.cache is not None:
+            redis_ok = await app.state.cache._get_client() is not None
+    except Exception:
+        redis_ok = False
+
+    tools = {}
+    try:
+        tools = await app.state.tool_registry.health()
+    except Exception:
+        tools = {"registry": False}
+
+    breakers = {
+        s["name"]: s["state"]
+        for s in app.state.llm_client.breaker_stats()
+    }
+
+    critical_tools_ok = tools.get("web_search", True)
+    status = "ready" if critical_tools_ok else "degraded"
+
+    return ReadinessResponse(
+        status=status,
+        version=settings.api_version,
+        redis=redis_ok,
+        tools=tools,
+        breaker_states=breakers,
+    )
+
+
+# ── Agent ─────────────────────────────────────────────────────────────────────
 
 
 @router.post("/ask", response_model=QueryResponse, tags=["Agent"])
 async def ask(
     req: QueryRequest,
     request: Request,
-    cache: ResponseCache = Depends(get_cache),
+    cache: ResponseCache = Depends(deps.get_cache),
+    factory=Depends(deps.get_agent_factory),
 ) -> QueryResponse:
     """
-    Main endpoint: send a query to the Ask-the-Web agent.
-    Returns a structured answer with sources, citations, and metadata.
+    Main endpoint: query → cited answer. Singleflight-protected.
     """
+    from configs.settings import get_settings
+
     settings = get_settings()
     model = req.model or settings.default_model
     request_id = getattr(request.state, "request_id", "unknown")
 
     logger.info(
-        "api.ask",
-        request_id=request_id,
-        query=req.query[:80],
-        agent_type=req.agent_type,
+        "api.ask", request_id=request_id,
+        query=req.query[:80], agent_type=req.agent_type,
     )
 
-    # ── Cache check ───────────────────────────────────────────────────────
-    if not req.stream:
-        cached = await cache.get(req.query, req.agent_type.value, model)
-        if cached:
+    async def _compute() -> dict[str, Any]:
+        state, agent_str = await _run_agent(req, request, factory)
+        return _state_to_response(
+            state, agent_str, model, cached=False
+        ).model_dump()
+
+    if req.use_cache:
+        value, computed = await cache.get_or_compute(
+            req.query, req.agent_type.value, model, _compute
+        )
+        response = QueryResponse(**value)
+        if not computed:
+            response.cached = True
             logger.info("api.ask.cache_hit", request_id=request_id)
-            return QueryResponse(**cached, cached=True)
+        return response
 
-    # ── Run agent ─────────────────────────────────────────────────────────
-    state, agent_type_str = await _run_agent(req)
-
-    response = _state_to_response(state, agent_type_str, model, cached=False)
-
-    # ── Cache store ───────────────────────────────────────────────────────
-    await cache.set(
-        req.query,
-        req.agent_type.value,
-        model,
-        response.model_dump(),
-    )
-
-    return response
+    return QueryResponse(**await _compute())
 
 
 @router.post("/ask/stream", tags=["Agent"])
-async def ask_stream(req: QueryRequest, request: Request) -> StreamingResponse:
+async def ask_stream(
+    req: QueryRequest,
+    request: Request,
+    factory=Depends(deps.get_agent_factory),
+) -> StreamingResponse:
     """
-    Streaming endpoint: runs the agent, then streams the final answer
-    token by token using Server-Sent Events (SSE).
+    Streaming endpoint (SSE): metadata first, then answer tokens with
+    heartbeats, then done. Client disconnect stops the work.
     """
+    from configs.settings import get_settings
+
     settings = get_settings()
     model = req.model or settings.default_model
     request_id = getattr(request.state, "request_id", "unknown")
+    llm: LLMClient = request.app.state.llm_client
 
     logger.info("api.ask.stream", request_id=request_id, query=req.query[:80])
 
-    async def event_generator() -> AsyncIterator[str]:
-        try:
-            # Run the agent to get tool results and context
-            state, agent_type_str = await _run_agent(req)
+    async def event_producer() -> AsyncIterator[dict[str, Any]]:
+        state, agent_str = await _run_agent(req, request, factory)
 
-            # Build messages for final streaming synthesis
-            llm = LLMClient()
-
-            # Send metadata first
-            meta = {
-                "type": "metadata",
+        yield {
+            "event": "metadata",
+            "data": {
                 "request_id": request_id,
                 "sources": state.sources,
                 "iterations": state.iterations,
                 "tools_called": [tc.name for tc in state.tool_calls_made],
-            }
-            yield f"data: {json.dumps(meta)}\n\n"
+                "degraded": state.degraded,
+                "degradation_reasons": state.degradation_reasons,
+            },
+        }
 
-            # Stream the final answer
-            from core.message_types import Message, Role
-            synthesis_messages = [
-                Message(
-                    role=Role.SYSTEM,
-                    content=(
-                        "Provide the final answer based on prior research. "
-                        "Use markdown formatting and cite sources."
-                    ),
+        synthesis_messages = [
+            Message(
+                role=Role.SYSTEM,
+                content=(
+                    "Provide the final answer based on prior research. "
+                    "Use markdown formatting and cite sources."
                 ),
-                Message(
-                    role=Role.USER,
-                    content=(
-                        f"Question: {req.query}\n\n"
-                        f"Research findings:\n{state.final_answer}"
-                    ),
+            ),
+            Message(
+                role=Role.USER,
+                content=(
+                    f"Question: {req.query}\n\n"
+                    f"Research findings:\n{state.final_answer}"
                 ),
-            ]
+            ),
+        ]
 
-            async for token in llm.stream_complete(
-                messages=synthesis_messages,
-                model=model,
-            ):
-                chunk = {"type": "token", "delta": token, "done": False}
-                yield f"data: {json.dumps(chunk)}\n\n"
+        async for token in llm.stream_complete(
+            messages=synthesis_messages, model=model,
+        ):
+            yield {"event": "token", "data": {"delta": token}}
 
-            # Signal completion
-            yield f"data: {json.dumps({'type': 'done', 'done': True})}\n\n"
+        yield {"event": "done", "data": {"done": True}}
 
-        except Exception as exc:
-            logger.error("stream.error", error=str(exc))
-            error_chunk = {"type": "error", "error": str(exc)}
-            yield f"data: {json.dumps(error_chunk)}\n\n"
+    from api.streaming import sse_stream
+
+    async def _is_disconnected() -> bool:
+        return await request.is_disconnected()
 
     return StreamingResponse(
-        event_generator(),
+        sse_stream(producer=event_producer(), is_disconnected=_is_disconnected),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
         },
     )
+
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
 
 
 @router.post("/evaluate", response_model=EvaluationResponse, tags=["Evaluation"])
 async def evaluate_answer(
     req: EvaluationRequest,
-    evaluator: AnswerEvaluator = Depends(get_evaluator),
+    evaluator: AnswerEvaluator = Depends(deps.get_evaluator),
 ) -> EvaluationResponse:
-    """
-    Evaluate an answer for quality, accuracy, and completeness.
-    Useful for CI pipelines and answer quality monitoring.
-    """
+    """Evaluate an answer for quality — CI pipelines and monitoring."""
     result = await evaluator.evaluate(
         query=req.query,
         answer=req.answer,
@@ -256,6 +309,9 @@ async def evaluate_answer(
         ground_truth=req.ground_truth,
     )
     return EvaluationResponse(**result)
+
+
+# ── Model catalog ─────────────────────────────────────────────────────────────
 
 
 @router.get("/models", tags=["System"])
