@@ -45,9 +45,12 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install project + mypy
         run: pip install -e ".[dev]"
-      - name: Mypy (baseline mode)
+      - name: Mypy
+        # Hard gate since 2026-10-16: the codebase is mypy-clean
+        # (51 source files, zero findings). Baseline mode with
+        # ignore-missing-imports; ratchets toward strict in planned
+        # increments — see ADR-006.
         run: mypy core tools agents workflows api evaluation --ignore-missing-imports
-        continue-on-error: true   # strict mode lands progressively
 
   test:
     name: Tests (pytest)
