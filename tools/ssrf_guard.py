@@ -127,6 +127,12 @@ def validate_url(
         for info in addrinfos:
             sockaddr = info[4]
             addr = sockaddr[0]
+            # getaddrinfo stubs type sockaddr as a union across address
+            # families; only the str form (inet/inet6) carries a host.
+            # Fixed 2026-10-16: guard instead of assuming — .split() on the
+            # int variant was a latent TypeError (mypy union-attr).
+            if not isinstance(addr, str):
+                continue
             try:
                 ip = ipaddress.ip_address(addr.split("%")[0])
             except ValueError:

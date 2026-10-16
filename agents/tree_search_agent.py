@@ -213,10 +213,14 @@ class TreeSearchAgent(BaseAgent):
         except BudgetExceededError as exc:
             log.warning("tree_search.budget_exceeded", dimension=exc.dimension)
             # Salvage: use whatever the current beam has gathered.
-            best = max(beam, key=lambda n: n.score) if beam else None
-            if best is not None and best.tool_results:
-                state.tool_calls_made = best.tool_calls
-                state.tool_results_received = best.tool_results
+            # (renamed from `best` 2026-10-16: reusing the name forced a
+            # TreeNode|None onto a variable mypy had already typed as
+            # TreeNode from the happy path — and shadowed the semantic:
+            # this is salvage, not the best node.)
+            salvage = max(beam, key=lambda n: n.score) if beam else None
+            if salvage is not None and salvage.tool_results:
+                state.tool_calls_made = salvage.tool_calls
+                state.tool_results_received = salvage.tool_results
             self._mark_budget_exceeded(state, exc)
             self._finish(state, start, outcome="budget_exceeded")
             return state

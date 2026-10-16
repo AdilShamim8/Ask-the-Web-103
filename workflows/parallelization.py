@@ -105,7 +105,12 @@ class ParallelVoting:
 
         answers: list[str] = []
         for r in responses:
-            if isinstance(r, Exception):
+            # Positive typing (fixed 2026-10-16): checking the Exception
+            # side left Message | BaseException for r.content below —
+            # a non-Exception BaseException (e.g. asyncio.CancelledError
+            # in exotic paths) would have slipped into r.content and
+            # crashed the vote. Check what we WANT, not what we fear.
+            if not isinstance(r, Message):
                 answers.append("__VOTE_ERROR__")
                 continue
             raw = r.content or ""
