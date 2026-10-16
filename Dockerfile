@@ -3,25 +3,31 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# System deps for lxml and playwright
+# System deps for lxml and friends
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps into a virtual environment
-COPY pyproject.toml .
+# Install Python deps into a virtual environment (layer-cached: deps
+# change far less often than code — pyproject first, source later)
+COPY pyproject.toml README.md ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && pip install -e ".[dev]"
+RUN pip install --upgrade pip && pip install ".[dev]"
 
-# ── Runtime stage ─────────────────────────────────────────────────────────────
+# ── Runtime stage ────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# Runtime system deps
+# Runtime system deps.
+# NOTE (fixed 2026-10-16): curl is now installed in the RUNTIME stage —
+# the previous image's HEALTHCHECK invoked curl that only existed in the
+# builder stage, so every healthcheck failed while the app was healthy.
+# See docs/DEPLOYMENT.md and FMEA FM-17.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     libglib2.0-0 \
     libnss3 \
     libnspr4 \
@@ -45,27 +51,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from builder
+# Virtual env from builder (no build toolchain ships to runtime)
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Playwright browsers
+# Playwright browsers (installed as root, used by appuser)
 RUN playwright install chromium
 
-# Copy application code
+# Application code (dockerignore keeps this layer small)
 COPY . .
 
-# Non-root user
+# Non-root user; own /app for any runtime writes (logs, caches)
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/v1/health || exit 1
+# Liveness: process-level, CHEAP — matches /healthz contract (no
+# provider calls, no Redis). Deep checks are /readyz, used by K8s.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:8000/v1/healthz || exit 1
 
-CMD ["uvicorn", "api.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1", \
-     "--log-config", "/dev/null"]
+# Production server: gunicorn supervises uvicorn workers
+# (configs/gunicorn_conf.py — worker recycling, graceful drain).
+CMD ["gunicorn", "api.main:app", \
+     "--config", "configs/gunicorn_conf.py"]
