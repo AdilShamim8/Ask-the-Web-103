@@ -168,7 +168,7 @@ class TreeSearchAgent(BaseAgent):
                 expanded_batches = await asyncio.gather(*expand_tasks, return_exceptions=True)
 
                 next_candidates: list[TreeNode] = []
-                for node, children in zip(beam, expanded_batches):
+                for node, children in zip(beam, expanded_batches, strict=True):
                     if isinstance(children, BaseException):
                         log.warning(
                             "tree_search.expand_failed",
@@ -184,7 +184,7 @@ class TreeSearchAgent(BaseAgent):
                 # ── Score in parallel (fast tier) ─────────────────────
                 score_tasks = [self._score_node(node, query) for node in next_candidates]
                 scores = await asyncio.gather(*score_tasks, return_exceptions=True)
-                for node, score in zip(next_candidates, scores):
+                for node, score in zip(next_candidates, scores, strict=True):
                     node.score = 0.5 if isinstance(score, BaseException) else score
 
                 # ── Terminal check ────────────────────────────────────

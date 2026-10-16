@@ -294,7 +294,7 @@ class ReWOOAgent(BaseAgent):
                 tool_calls, budget=self._budget, usage=self._usage
             )
 
-            for step, tc, tr in zip(independent, tool_calls, results):
+            for step, tc, tr in zip(independent, tool_calls, results, strict=True):
                 step.tool_call_id = tc.id
                 step.observation = tr.content
                 step.failed = tr.is_error
