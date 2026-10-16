@@ -1,0 +1,41 @@
+# Pre-commit hooks — the local bar before anything reaches CI.
+# Install once:  pre-commit install
+# Run manually:  pre-commit run --all-files
+
+repos:
+  # Formatting + linting (mirrors CI's ruff job exactly)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Catch real secrets before they ever reach a commit (FM-16)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # Generic hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$           # markdown hard-wraps are intentional
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: deploy/k8s/.*   # multi-doc manifests handled explicitly
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]      # big binaries don't belong in git
+      - id: detect-private-key
+
+  # Ensure shell scripts pass basic syntax + shellcheck
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
