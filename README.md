@@ -1,6 +1,6 @@
 <div align="center">
 
-#  Project 3 - Build an "Ask-the-Web" Agent similar to Perplexity with Tool calling
+# Project 3 — Build an "Ask-the-Web" Agent similar to Perplexity with Tool calling
 
 ### A production-grade, Perplexity-like AI research agent
 ### built with ReACT · ReWOO · Reflexion · Tree Search · MCP · A2A
@@ -12,7 +12,11 @@
 [![Redis](https://img.shields.io/badge/Redis-7+-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-Pytest-yellow?style=for-the-badge&logo=pytest)](https://pytest.org)
+
+[![CI](https://img.shields.io/badge/CI-lint%20·%20types%20·%20tests%20·%20smoke-2088FF?style=flat-square)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-158%20passing-brightgreen?style=flat-square)](tests/)
+[![Version](https://img.shields.io/badge/release-v2.0.0-blueviolet?style=flat-square)](CHANGELOG.md)
+[![Re-architected](https://img.shields.io/badge/re--architected-2026--10--16-orange?style=flat-square)](docs/ARCHITECTURE.md)
 
 <br/>
 
@@ -32,6 +36,51 @@
 [Contributing](#-contributing)
 
 </div>
+
+---
+
+## 🏭 v2.0.0 — Production Re-architecture (2026-10-16)
+
+This repository now carries **two layers**:
+
+1. **The course layer** — the original tutorial build (everything below,
+   and `Tutorial-103.md`): every agent pattern taught end-to-end.
+2. **The production layer** — a ground-up hardening program executed as
+   **108 granular commits** (`git log --grep "Commit-Ref"`) treating the
+   project as a real product for 100–200M daily users: budgets on every
+   LLM/tool call, SSRF-guarded tool execution, provider fallback chains
+   behind circuit breakers, stampede-proof caching, graceful degradation
+   over hard failure, and a CI quality gate on answer quality itself.
+
+**Where the production story lives:**
+
+| Document | What it answers |
+| -------- | --------------- |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the system is built (C4 views, SLOs, scale path) |
+| [`docs/architecture/capacity-planning.md`](docs/architecture/capacity-planning.md) | What 200M users cost — QPS, tokens, dollars |
+| [`docs/architecture/failure-mode-analysis.md`](docs/architecture/failure-mode-analysis.md) | Where it breaks and why (18 FMEA entries) |
+| [`docs/architecture/request-lifecycle.md`](docs/architecture/request-lifecycle.md) | One request, end to end, with failure branches |
+| [`docs/architecture/adr/`](docs/architecture/adr/) | Why the big decisions were made (5 ADRs) |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | On-call: triage, incidents, escalation |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Rollout safety, staging gates, config checklist |
+| [`SECURITY.md`](SECURITY.md) | Threat model and how each threat is mitigated |
+| [`CHANGELOG.md`](CHANGELOG.md) | Every fix, including 7 real bugs the hardening found |
+
+**The guarantees the production layer adds** (all enforced by 158
+passing tests):
+
+- **Bounded by design** — every request carries a budget (tokens, tools,
+  steps, wall-clock); runaway agents return partial answers, never hang.
+- **Degraded, not down** — provider outages trip circuit breakers and
+  shift traffic; when everything is unhealthy, users get snippet-grounded
+  answers with a disclosure instead of 503s.
+- **Safe by construction** — LLM-produced URLs pass an SSRF guard
+  (cloud metadata and internal ranges unreachable), bodies are
+  byte-capped, tool results truncated before entering context.
+- **Cost is observable** — per-request USD accounting flows into
+  metrics and API responses.
+- **Fast where it counts** — singleflight caching collapses stampedes to
+  one computation; cheap model tiers handle routing and classification.
 
 ---
 
@@ -58,6 +107,7 @@
   - [Routing](#routing)
   - [Parallelization](#parallelization)
   - [Reflection](#reflection)
+  - [Orchestrator-Worker](#orchestrator-worker-pattern)
 - [Tools](#-tools)
   - [Built-in Tools](#built-in-tools)
   - [MCP Integration](#mcp-integration)
@@ -82,6 +132,7 @@
 - [License](#-license)
 
 ---
+
 
 ## What Is This?
 
