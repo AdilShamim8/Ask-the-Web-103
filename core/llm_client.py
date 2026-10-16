@@ -291,14 +291,21 @@ class LLMClient:
             "model": model,
             "messages": chat_messages,
             "max_tokens": max_tokens,
-            "temperature": temperature,
         }
         if system_content:
             kwargs["system"] = system_content.strip()
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools
+        if temperature is not None:
+            kwargs["temperature"] = temperature
 
         try:
+            response = await client.messages.create(**kwargs)
+        except TypeError:
+            # SDK compatibility (found 2026-10-16): newer anthropic SDKs
+            # reject optional sampling params on some models. Sampling is
+            # a nicety, not a requirement — retry once without it.
+            kwargs.pop("temperature", None)
             response = await client.messages.create(**kwargs)
         except Exception:
             LLM_CALLS.labels(provider="anthropic", model=model, outcome="error").inc()
