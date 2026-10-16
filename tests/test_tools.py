@@ -108,12 +108,18 @@ class TestToolExecutor:
         assert result.content == "4"
 
     async def test_execute_one_error(self) -> None:
+        """v2 contract: errors are structured JSON, not prose — agents
+        and clients parse them reliably."""
+        import json as _json
+
         registry = build_default_registry()
         executor = ToolExecutor(registry)
         call = ToolCall(name="calculator", arguments={"expression": "bad expr!!!"})
         result = await executor.execute_one(call)
         assert result.is_error
-        assert "ERROR" in result.content
+        payload = _json.loads(result.content)
+        assert "error" in payload
+        assert "syntax" in payload["error"].lower()
 
     async def test_execute_parallel(self) -> None:
         registry = build_default_registry()
@@ -147,8 +153,8 @@ class TestWebSearchTool:
         assert schema["function"]["name"] == "web_search"
         assert "query" in schema["function"]["parameters"]["required"]
 
-    @patch("tools.web_search.httpx.AsyncClient")
-    async def test_tavily_success(self, mock_client_cls: MagicMock) -> None:
+    @patch("tools.web_search.get_http_client")
+    async def test_tavily_success(self, mock_get_client: MagicMock) -> None:
         fake_response = MagicMock()
         fake_response.raise_for_status = MagicMock()
         fake_response.json = MagicMock(return_value={
@@ -163,24 +169,14 @@ class TestWebSearchTool:
         })
 
         mock_client = AsyncMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client.post = AsyncMock(return_value=fake_response)
-        mock_client_cls.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
-        with patch("tools.web_search.get_settings") as mock_settings:
-            from configs.settings import SearchProvider
-            settings = MagicMock()
-            settings.search_provider = SearchProvider.TAVILY
-            settings.tavily_api_key.get_secret_value.return_value = "test-key"
-            settings.search_timeout = 15.0
-            mock_settings.return_value = settings
-
-            tool = WebSearchTool()
-            result = await tool.execute(query="test query", num_results=1)
-            data = json.loads(result)
-            assert "results" in data
-            assert data["results"][0]["title"] == "Test Title"
+        tool = WebSearchTool()
+        result = await tool.execute(query="test query", num_results=1)
+        data = json.loads(result)
+        assert "results" in data
+        assert data["results"][0]["title"] == "Test Title"
 
 
 # ── Web Scraper ───────────────────────────────────────────────────────────────
@@ -193,10 +189,21 @@ class TestWebScraperTool:
         assert "blocked" in result.lower()
 
     async def test_invalid_scheme(self) -> None:
-        from core.exceptions import ScrapingError
+        """Non-http(s) schemes are rejected by the SSRF guard BEFORE any
+        request is attempted (FM-08)."""
+        from core.exceptions import SSRFBlockedError
+
         tool = WebScraperTool()
-        with pytest.raises(ScrapingError):
+        with pytest.raises(SSRFBlockedError):
             await tool.execute(url="ftp://example.com/file")
+
+    async def test_internal_ip_blocked(self) -> None:
+        """Cloud metadata endpoints must be unreachable via scrape."""
+        from core.exceptions import SSRFBlockedError
+
+        tool = WebScraperTool()
+        with pytest.raises(SSRFBlockedError):
+            await tool.execute(url="http://169.254.169.254/latest/meta-data/")
 
     def test_parse_html_extracts_text(self) -> None:
         tool = WebScraperTool()
@@ -212,7 +219,7 @@ class TestWebScraperTool:
           </body>
         </html>
         """
-        text, links = tool._parse_html(html, "https://example.com")
+        text, links = tool._parse_html(html)
         assert "Main Title" in text
         assert "Important content here" in text
         assert "Navigation junk" not in text

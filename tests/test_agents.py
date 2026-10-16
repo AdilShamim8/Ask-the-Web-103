@@ -126,8 +126,13 @@ class TestReACTAgent:
             max_iterations=3,
         )
 
-        with pytest.raises(MaxIterationsExceededError):
-            await agent.run("Loop forever question")
+        # v2 contract (FM-06): max-iterations DEGRADES instead of raising.
+        # The user gets a best-effort partial answer + degradation flag,
+        # never a 422 for a slow-but-working research loop.
+        state = await agent.run("Loop forever question")
+        assert state.final_answer is not None
+        assert state.degraded is True
+        assert "max_iterations" in state.degradation_reasons
 
     async def test_initial_state_has_system_message(self) -> None:
         llm = make_mock_llm()
