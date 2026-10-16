@@ -1,3 +1,16 @@
+"""
+Base agent — shared machinery for every reasoning strategy.
+
+Production additions:
+* Request-scoped ``BudgetManager`` + ``UsageTracker`` are created here and
+  threaded to every LLM/tool call (ADR-005). A strategy that forgets to
+  check them is still protected because executor/LLMClient enforce.
+* Telemetry: AGENT_RUNS/AGENT_LATENCY counters with outcome labels;
+  budget exhaustion is an EXPECTED outcome, not an error (FM-06).
+* Graceful degradation markers on state: ``degraded`` +
+  ``degradation_reasons`` let the API disclose quality loss honestly.
+"""
+
 from __future__ import annotations
 
 import abc
@@ -7,15 +20,17 @@ from typing import Any, AsyncIterator
 import structlog
 
 from configs.settings import get_settings
-from core.exceptions import ContextWindowExceededError, MaxIterationsExceededError
+from core.budgets import BudgetConfig, BudgetManager
+from core.exceptions import BudgetExceededError, ContextWindowExceededError, MaxIterationsExceededError
 from core.llm_client import LLMClient
 from core.message_types import AgentState, Message, Role
+from core.observability import AGENT_LATENCY, AGENT_RUNS, BUDGET_EXCEEDED
 from core.token_counter import TokenCounter
+from core.usage_tracker import UsageTracker
 from tools.tool_executor import ToolExecutor
 from tools.tool_registry import ToolRegistry
 
 logger = structlog.get_logger(__name__)
-
 
 SYSTEM_PROMPT = """\
 You are a world-class research assistant similar to Perplexity AI.
@@ -47,6 +62,8 @@ class BaseAgent(abc.ABC):
     Subclasses implement `run` with their specific reasoning strategy.
     """
 
+    agent_name: str = "base"
+
     def __init__(
         self,
         llm_client: LLMClient,
@@ -55,6 +72,9 @@ class BaseAgent(abc.ABC):
         model: str | None = None,
         max_iterations: int | None = None,
         system_prompt: str = SYSTEM_PROMPT,
+        *,
+        budget: BudgetManager | None = None,
+        usage: UsageTracker | None = None,
     ) -> None:
         self._llm = llm_client
         self._registry = registry
@@ -63,11 +83,15 @@ class BaseAgent(abc.ABC):
         self._model = model or self._settings.default_model
         self._max_iterations = max_iterations or self._settings.max_agent_iterations
         self._system_prompt = system_prompt
+        self._budget = budget or BudgetManager(BudgetConfig.from_settings())
+        self._usage = usage or UsageTracker()
 
     @abc.abstractmethod
     async def run(self, query: str, **kwargs: Any) -> AgentState:
         """Run the agent and return final AgentState."""
         ...
+
+    # ── Shared helpers ───────────────────────────────────────────────────
 
     def _build_initial_state(self, query: str) -> AgentState:
         state = AgentState(query=query)
@@ -87,7 +111,7 @@ class BaseAgent(abc.ABC):
             )
 
     def _trim_context(self, state: AgentState) -> None:
-        """Ensure message history stays within context window."""
+        """Keep message history within the context window."""
         trimmed = TokenCounter.trim_to_fit(
             messages=state.messages,
             model=self._model,
@@ -97,19 +121,15 @@ class BaseAgent(abc.ABC):
         if len(trimmed) < len(state.messages):
             dropped = len(state.messages) - len(trimmed)
             logger.warning(
-                "context.trimmed",
-                dropped_messages=dropped,
-                model=self._model,
+                "context.trimmed", dropped_messages=dropped, model=self._model,
             )
         state.messages = trimmed
 
     def _extract_sources(self, state: AgentState) -> None:
-        """
-        Parse tool results for URLs and build a deduplicated sources list.
-        """
+        """Parse tool results for URLs; build deduplicated sources list."""
         import json
-        seen: set[str] = set()
 
+        seen: set[str] = set()
         for tr in state.tool_results_received:
             if tr.tool_name not in ("web_search", "scrape_webpage"):
                 continue
@@ -118,7 +138,6 @@ class BaseAgent(abc.ABC):
             except (json.JSONDecodeError, TypeError):
                 continue
 
-            # web_search results
             if "results" in data:
                 for r in data["results"]:
                     url = r.get("url", "")
@@ -127,7 +146,6 @@ class BaseAgent(abc.ABC):
                         seen.add(url)
                         state.sources.append({"title": title, "url": url})
 
-            # scrape_webpage result
             if "url" in data and data["url"] not in seen:
                 seen.add(data["url"])
                 state.sources.append({"title": data["url"], "url": data["url"]})
@@ -135,13 +153,57 @@ class BaseAgent(abc.ABC):
     def _get_tool_schemas(self) -> list[dict[str, Any]]:
         return self._registry.get_schemas()
 
-    def _log_state_summary(self, state: AgentState, elapsed: float) -> None:
+    def _finish(self, state: AgentState, start: float, outcome: str = "ok") -> None:
+        """Shared teardown: attach usage/budget, emit telemetry, log."""
+        state.metadata["usage"] = self._usage.to_dict()
+        state.metadata["budget"] = self._budget.snapshot().to_dict()
+
+        AGENT_RUNS.labels(agent_type=self.agent_name, outcome=outcome).inc()
+        AGENT_LATENCY.labels(agent_type=self.agent_name).observe(
+            time.perf_counter() - start
+        )
+        self._usage.export_cost_metric()
+
         logger.info(
-            "agent.completed",
+            f"{self.agent_name}.completed",
             query=state.query[:80],
             iterations=state.iterations,
             tools_called=len(state.tool_calls_made),
             sources_found=len(state.sources),
-            elapsed_s=round(elapsed, 2),
-            has_answer=state.final_answer is not None,
+            elapsed_s=round(time.perf_counter() - start, 2),
+            cost_usd=round(self._usage.report.total_cost_usd, 6),
+            degraded=state.degraded,
         )
+
+    def _mark_budget_exceeded(self, state: AgentState, exc: BudgetExceededError) -> None:
+        """Budget exhaustion is a controlled outcome (FM-06): mark, emit,
+        and attach a best-effort partial answer."""
+        BUDGET_EXCEEDED.labels(dimension=exc.dimension).inc()
+        state.degraded = True
+        state.degradation_reasons.append(f"budget:{exc.dimension}")
+        state.metadata["budget_exceeded"] = exc.to_dict()
+        if state.final_answer is None:
+            state.final_answer = self._partial_answer(state)
+
+    @staticmethod
+    def _partial_answer(state: AgentState) -> str:
+        """Best-effort answer from evidence already gathered."""
+        snippets: list[str] = []
+        for tr in state.tool_results_received[:3]:
+            if not tr.is_error and tr.tool_name == "web_search":
+                snippets.append(tr.content[:600])
+        if snippets:
+            return (
+                "I was unable to complete the full research within this "
+                "request's budget. Preliminary sources found:\n\n"
+                + "\n\n".join(f"- {s}" for s in snippets)
+                + "\n\n_Partial answer — request terminated by budget guard._"
+            )
+        return (
+            "This request exceeded its processing budget before an answer "
+            "could be produced. Please try a narrower question."
+        )
+
+    # Kept for backward compatibility with older call sites.
+    def _log_state_summary(self, state: AgentState, elapsed: float) -> None:
+        self._finish(state, elapsed)
