@@ -1,91 +1,101 @@
-from __future__ import annotations
-
 """
-A2A — Agent-to-Agent Communication Protocol
+A2A — Agent-to-Agent protocol: types + client.
 
-Implements Google's Agent-to-Agent (A2A) protocol pattern:
-https://google.github.io/A2A/
+Protocol: https://google.github.io/A2A/
 
 Core concepts:
-    AgentCard     — Declares what an agent can do (like an API schema)
-    Task          — A unit of work sent from one agent to another
-    A2AServer     — Exposes an agent as an HTTP endpoint
-    A2AClient     — Calls remote agents as if they were local tools
+    AgentCard     — declares what an agent can do (like an API schema)
+    A2ATask       — a unit of work sent from one agent to another
+    A2ATaskResult — lifecycle-tracked outcome
 
-This enables true multi-agent systems where specialized agents
-collaborate to solve complex problems.
+This module is the CLIENT side (calling remote agents). The SERVER side
+(exposing this agent over A2A) lives in a2a_server.py; the multi-agent
+coordinator lives in a2a_coordinator.py.
+
+Production hardening:
+* Per-remote-agent circuit breaker — a dead specialist fails fast and
+  stops consuming request time (FM-01/FM-12).
+* Polling is bounded: max poll duration, exponential poll interval with
+  jitter (no 1s-fixed-interval hammering of a busy agent).
+* The task submission includes a deadline derived from the caller's
+  remaining wall-clock budget (ADR-005) — remote agents can't eat time
+  the request doesn't have.
 """
 
+from __future__ import annotations
+
 import asyncio
+import random
 import time
 import uuid
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 import httpx
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from core.message_types import AgentState
+from core.exceptions import A2AError, ProviderUnavailableError
+from core.resilience import BreakerRegistry
+from tools.http_client import get_http_client
 
 logger = structlog.get_logger(__name__)
+
+_breakers = BreakerRegistry()
 
 
 # ── Protocol Types ────────────────────────────────────────────────────────────
 
+
 class TaskStatus(str, Enum):
-    SUBMITTED  = "submitted"
-    WORKING    = "working"
-    COMPLETED  = "completed"
-    FAILED     = "failed"
-    CANCELLED  = "cancelled"
+    SUBMITTED = "submitted"
+    WORKING = "working"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class AgentCapability(BaseModel):
     name: str
     description: str
-    input_schema: dict[str, Any] = {}
-    output_schema: dict[str, Any] = {}
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentCard(BaseModel):
-    """
-    Describes an agent's identity and capabilities.
-    Published at /.well-known/agent.json per A2A spec.
-    """
+    """Describes an agent's identity and capabilities (/.well-known/agent.json)."""
+
     agent_id: str
     name: str
     description: str
     version: str = "1.0.0"
     url: str
-    capabilities: list[AgentCapability] = []
+    capabilities: list[AgentCapability] = Field(default_factory=list)
     auth_required: bool = False
 
 
 class A2ATask(BaseModel):
-    task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    task_id: str = Field(default_factory=lambda: uuid.uuid4().hex)
     capability: str
-    input: dict[str, Any]
+    input: dict[str, Any] = Field(default_factory=dict)
     caller_agent_id: str = ""
-    metadata: dict[str, Any] = {}
+    deadline_s: float | None = None   # caller's remaining wall-clock budget
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class A2ATaskResult(BaseModel):
     task_id: str
     status: TaskStatus
-    output: dict[str, Any] = {}
+    output: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
     elapsed_s: float = 0.0
 
 
 # ── A2A Client ────────────────────────────────────────────────────────────────
 
+
 class A2AClient:
-    """
-    Calls a remote agent via the A2A protocol.
-    Can be used as a tool by the orchestrator.
-    """
+    """Calls a remote agent via the A2A protocol, under breaker protection."""
 
     def __init__(
         self,
@@ -97,203 +107,117 @@ class A2AClient:
         self._timeout = timeout
         self._api_key = api_key
 
+    @property
+    def card(self) -> AgentCard:
+        return self._card
+
     async def call(
         self,
         capability: str,
         input_data: dict[str, Any],
-        poll_interval: float = 1.0,
+        *,
+        deadline_s: float | None = None,
     ) -> A2ATaskResult:
         """
-        Submit a task to the remote agent and poll until completion.
-        Implements the async task pattern from the A2A spec.
-        """
-        log = logger.bind(
-            remote_agent=self._card.name,
-            capability=capability,
-        )
-        log.info("a2a.task.submit")
+        Submit a task and poll until completion (async task pattern).
 
+        ``deadline_s``: remaining caller budget. Polling stops and the
+        task is treated as timed out when exceeded — remote work must fit
+        inside the request's wall-clock envelope (ADR-005).
+        """
+        log = logger.bind(remote_agent=self._card.name, capability=capability)
+
+        breaker = _breakers.get_or_create(f"a2a:{self._card.agent_id}")
+
+        async def _do_call() -> A2ATaskResult:
+            return await self._submit_and_poll(
+                capability, input_data, deadline_s, log
+            )
+
+        try:
+            return await breaker.call(_do_call)
+        except ProviderUnavailableError as exc:
+            raise A2AError(
+                f"remote agent '{self._card.name}' unavailable: {exc}",
+                context={"agent": self._card.agent_id},
+            ) from exc
+        except Exception as exc:
+            raise A2AError(
+                f"A2A call to '{self._card.name}' failed: {exc}",
+                context={"agent": self._card.agent_id},
+            ) from exc
+
+    async def _submit_and_poll(
+        self,
+        capability: str,
+        input_data: dict[str, Any],
+        deadline_s: float | None,
+        log: Any,
+    ) -> A2ATaskResult:
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
+        client = get_http_client()
+
         task = A2ATask(
             capability=capability,
             input=input_data,
+            deadline_s=deadline_s,
         )
 
-        async with httpx.AsyncClient(
-            timeout=self._timeout, headers=headers
-        ) as client:
-            # Submit task
-            resp = await client.post(
-                f"{self._card.url}/a2a/tasks",
-                json=task.model_dump(),
-            )
-            resp.raise_for_status()
-            submitted = resp.json()
-            task_id = submitted["task_id"]
+        log.info("a2a.task.submit")
 
-            # Poll for completion
-            start = time.perf_counter()
-            while True:
-                await asyncio.sleep(poll_interval)
-                status_resp = await client.get(
-                    f"{self._card.url}/a2a/tasks/{task_id}"
+        resp = await client.post(
+            f"{self._card.url}/a2a/tasks",
+            json=task.model_dump(),
+            headers=headers,
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        submitted = resp.json()
+        task_id = submitted["task_id"]
+
+        # Poll with exponential backoff + jitter (be gentle with busy agents)
+        start = time.perf_counter()
+        poll_interval = 0.5
+        max_poll = deadline_s or self._timeout
+
+        while True:
+            await asyncio.sleep(poll_interval + random.uniform(0, 0.2))
+            poll_interval = min(2.0, poll_interval * 1.5)
+
+            elapsed = time.perf_counter() - start
+            if elapsed > max_poll:
+                log.warning("a2a.task.timeout", task_id=task_id, elapsed_s=elapsed)
+                return A2ATaskResult(
+                    task_id=task_id,
+                    status=TaskStatus.FAILED,
+                    error=f"A2A task timed out after {elapsed:.1f}s",
                 )
-                status_resp.raise_for_status()
-                result_data = status_resp.json()
-                status = TaskStatus(result_data["status"])
 
-                if status == TaskStatus.COMPLETED:
-                    log.info(
-                        "a2a.task.completed",
-                        elapsed_s=round(time.perf_counter() - start, 2),
-                    )
-                    return A2ATaskResult(**result_data)
+            status_resp = await client.get(
+                f"{self._card.url}/a2a/tasks/{task_id}",
+                headers=headers,
+                timeout=30.0,
+            )
+            status_resp.raise_for_status()
+            result_data = status_resp.json()
+            status = TaskStatus(result_data["status"])
 
-                if status in (TaskStatus.FAILED, TaskStatus.CANCELLED):
-                    log.error("a2a.task.failed", status=status)
-                    return A2ATaskResult(**result_data)
+            if status == TaskStatus.COMPLETED:
+                log.info("a2a.task.completed", elapsed_s=round(elapsed, 2))
+                return A2ATaskResult(**result_data)
 
-                if time.perf_counter() - start > self._timeout:
-                    return A2ATaskResult(
-                        task_id=task_id,
-                        status=TaskStatus.FAILED,
-                        error="A2A task timed out",
-                    )
+            if status in (TaskStatus.FAILED, TaskStatus.CANCELLED):
+                log.error("a2a.task.failed", status=status)
+                return A2ATaskResult(**result_data)
 
     async def get_agent_card(self) -> AgentCard:
-        """Fetch the remote agent's capability card."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{self._card.url}/.well-known/agent.json"
-            )
-            resp.raise_for_status()
-            return AgentCard(**resp.json())
-
-
-# ── A2A Server Routes (FastAPI) ───────────────────────────────────────────────
-
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from typing import Callable, Awaitable
-
-a2a_router = APIRouter(prefix="/a2a", tags=["A2A"])
-
-# In-memory task store (use Redis in production)
-_task_store: dict[str, A2ATaskResult] = {}
-
-
-def create_a2a_server(
-    agent_card: AgentCard,
-    handler: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]],
-) -> APIRouter:
-    """
-    Factory: creates A2A-compliant FastAPI routes for any agent.
-
-    handler(capability, input_data) → output_dict
-    """
-    router = APIRouter(prefix="/a2a", tags=["A2A"])
-
-    @router.get("/.well-known/agent.json", response_model=AgentCard)
-    async def get_agent_card() -> AgentCard:
-        return agent_card
-
-    @router.post("/tasks", response_model=A2ATaskResult)
-    async def submit_task(
-        task: A2ATask,
-        background: BackgroundTasks,
-    ) -> A2ATaskResult:
-        result = A2ATaskResult(
-            task_id=task.task_id,
-            status=TaskStatus.SUBMITTED,
+        """Fetch/refresh the remote agent's capability card."""
+        client = get_http_client()
+        resp = await client.get(
+            f"{self._card.url}/.well-known/agent.json", timeout=10.0
         )
-        _task_store[task.task_id] = result
-
-        async def _run() -> None:
-            _task_store[task.task_id] = A2ATaskResult(
-                task_id=task.task_id,
-                status=TaskStatus.WORKING,
-            )
-            start = time.perf_counter()
-            try:
-                output = await handler(task.capability, task.input)
-                _task_store[task.task_id] = A2ATaskResult(
-                    task_id=task.task_id,
-                    status=TaskStatus.COMPLETED,
-                    output=output,
-                    elapsed_s=round(time.perf_counter() - start, 2),
-                )
-            except Exception as exc:
-                _task_store[task.task_id] = A2ATaskResult(
-                    task_id=task.task_id,
-                    status=TaskStatus.FAILED,
-                    error=str(exc),
-                    elapsed_s=round(time.perf_counter() - start, 2),
-                )
-
-        background.add_task(_run)
-        return result
-
-    @router.get("/tasks/{task_id}", response_model=A2ATaskResult)
-    async def get_task(task_id: str) -> A2ATaskResult:
-        if task_id not in _task_store:
-            raise HTTPException(status_code=404, detail="Task not found")
-        return _task_store[task_id]
-
-    return router
-
-
-# ── Multi-Agent System using A2A ──────────────────────────────────────────────
-
-class MultiAgentCoordinator:
-    """
-    Coordinates multiple specialized agents via A2A protocol.
-
-    Registry maps capability names to A2AClient instances.
-    The coordinator routes sub-tasks to the appropriate specialist agent.
-    """
-
-    def __init__(self) -> None:
-        self._agents: dict[str, A2AClient] = {}
-
-    def register_agent(
-        self, capability: str, client: A2AClient
-    ) -> "MultiAgentCoordinator":
-        self._agents[capability] = client
-        logger.info(
-            "multi_agent.registered",
-            capability=capability,
-            agent=client._card.name,
-        )
-        return self
-
-    async def delegate(
-        self,
-        capability: str,
-        input_data: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Delegate a task to the agent best suited for the capability."""
-        if capability not in self._agents:
-            raise ValueError(
-                f"No agent registered for capability: '{capability}'. "
-                f"Available: {list(self._agents.keys())}"
-            )
-
-        client = self._agents[capability]
-        result = await client.call(capability=capability, input_data=input_data)
-
-        if result.status == TaskStatus.FAILED:
-            raise RuntimeError(
-                f"Agent '{client._card.name}' failed: {result.error}"
-            )
-
-        return result.output
-
-    async def delegate_parallel(
-        self,
-        tasks: list[tuple[str, dict[str, Any]]],
-    ) -> list[dict[str, Any]]:
-        """Delegate multiple independent tasks in parallel."""
-        coros = [self.delegate(cap, inp) for cap, inp in tasks]
-        return list(await asyncio.gather(*coros))
+        resp.raise_for_status()
+        return AgentCard(**resp.json())
