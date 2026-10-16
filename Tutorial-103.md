@@ -4,6 +4,34 @@
 
 ---
 
+> ### 📌 Production Addendum — 2026-10-16 (v2.0.0)
+>
+> This tutorial teaches the **course layer** of the project: every agent
+> concept (workflows, tool calling, MCP, ReACT/Reflexion/ReWOO, tree
+> search, A2A, evaluation) built from scratch, the way you should learn it.
+>
+> The repository has since gained a second layer — the **production
+> re-architecture** — executed as a 108-commit hardening program that treats
+> this project as a real product at 100–200M-user scale. Nothing in this
+> tutorial is invalidated by it; every pattern below still exists. What the
+> production layer ADDS around each pattern:
+>
+> | Tutorial topic | Production addition (where to read) |
+> | -------------- | ------------------------------------ |
+> | Agents & agency levels | Per-request budgets + degradation (`docs/architecture/adr/ADR-005`) |
+> | Workflows (chaining/routing/parallelization/reflection) | Budget steps, cached routing, exception isolation (`workflows/`) |
+> | Tools & tool calling | SSRF guard, timeouts, truncation, pooled HTTP (`tools/`) |
+> | MCP | Session reuse, TTL caches, we now also SERVE tools over MCP (`tools/mcp_server.py`) |
+> | Multi-step agents (ReACT/Reflexion/ReWOO/tree search) | Hard cost envelopes; runaway loops terminate with partial answers (`agents/`) |
+> | Multi-agent & A2A | Redis task store, per-agent breakers, deadline propagation (`agents/a2a*.py`) |
+> | Evaluation | Citation precision (fabrication detection), CI quality gate (`evaluation/`) |
+>
+> Start with the tutorial below; when you're ready for the production
+> layer, begin at `docs/ARCHITECTURE.md` and follow the document index in
+> the repo README. The full fix list lives in `CHANGELOG.md`.
+
+---
+
 > **What I am building:** An AI agent that can search the web, read results, think about them, and give you a smart answer with sources — just like Perplexity.ai does.
 
 ---
