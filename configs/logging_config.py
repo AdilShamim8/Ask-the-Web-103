@@ -87,11 +87,16 @@ def configure_logging() -> None:
     processors = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         redact_secrets,
     ]
+
+    # NOTE: structlog.stdlib.add_logger_name is deliberately ABSENT —
+    # it requires a stdlib Logger (has .name) and raises AttributeError
+    # with our PrintLoggerFactory. Discovered by the test suite
+    # (tests/configure structlog globally via lifespan startup);
+    # before this fix the app crashed on its first log call after boot.
 
     structlog.configure(
         processors=[
