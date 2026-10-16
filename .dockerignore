@@ -1,0 +1,50 @@
+# Keep Docker images small and build context fast.
+# Anything not needed at runtime inside the container belongs here.
+
+# VCS
+.git
+.gitignore
+.gitattributes
+.github
+
+# Docs (large, not needed in image)
+docs/
+*.md
+!README.md
+LICENSE
+Tutorial-103.md
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Dev & test tooling
+tests/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.pre-commit-config.yaml
+Makefile
+
+# Local env & secrets (injected via runtime secrets, never baked in)
+.env
+.env.*
+*.pem
+*.key
+
+# Infra manifests (applied by CI/CD, not the app container)
+deploy/
+docker-compose*.yml
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
