@@ -75,7 +75,11 @@ class WebScraperTool(BaseTool):
             },
         )
 
-    async def execute(
+    async def execute(  # type: ignore[override]
+        # Plugin-style contract: the REAL parameter contract is the
+        # ToolDefinition schema, validated by validate_arguments() before
+        # this is ever invoked. Named params are the ergonomic declaration
+        # of that schema; Liskov cannot hold across plugins.
         self,
         url: str,
         extract_links: bool = False,

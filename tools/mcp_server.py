@@ -70,6 +70,11 @@ def create_mcp_server(
             rpc_id = body.get("id", "")
             method = body.get("method", "")
             params = body.get("params", {}) or {}
+            # NOTE (fixed 2026-10-16): declared once here — mypy used to
+            # infer `result`'s type from the FIRST branch (initialize) and
+            # then reject every other branch's shape. dict[str, Any] is the
+            # actual contract: JSON-RPC results are arbitrary JSON objects.
+            result: dict[str, Any] = {}
 
             if method == "initialize":
                 result = {

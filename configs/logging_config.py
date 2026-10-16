@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 import re
 import sys
+from collections.abc import Mapping, MutableMapping
+from typing import Any
 
 import structlog
 from rich.console import Console
@@ -35,7 +37,11 @@ _SECRET_PATTERNS = [
 _REDACTED = "[REDACTED]"
 
 
-def redact_secrets(logger, method_name: str, event_dict: dict) -> dict:
+def redact_secrets(
+    logger: Any,
+    method_name: str,
+    event_dict: MutableMapping[str, Any],
+) -> Mapping[str, Any]:
     """structlog processor: scrub secret-looking values from all fields."""
 
     def _clean(value):
@@ -84,7 +90,10 @@ def configure_logging() -> None:
                   "urllib3", "asyncio"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
-    processors = [
+    # NOTE (fixed 2026-10-16): annotated as structlog.typing.Processor —
+    # the un-annotated heterogeneous literal inferred list[object], which
+    # structlog.configure then rejected.
+    processors: list[structlog.typing.Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),

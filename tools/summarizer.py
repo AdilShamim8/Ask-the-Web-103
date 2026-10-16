@@ -45,7 +45,11 @@ class TextSummarizerTool(BaseTool):
             },
         )
 
-    async def execute(
+    async def execute(  # type: ignore[override]
+        # Plugin-style contract: the REAL parameter contract is the
+        # ToolDefinition schema, validated by validate_arguments() before
+        # this is ever invoked. Named params here are the ergonomic
+        # declaration of that schema; Liskov cannot hold across plugins.
         self, text: str, max_sentences: int = 5, **_: Any
     ) -> str:
         # Input cap: summarizing multi-MB payloads is a latency and memory
