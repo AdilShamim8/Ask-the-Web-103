@@ -129,6 +129,16 @@ class BudgetManager:
     def time_remaining_s(self) -> float:
         return max(0.0, self._config.deadline_s - (time.monotonic() - self._start))
 
+    @property
+    def steps_remaining(self) -> int:
+        """Steps left before max_steps trips.
+
+        Added 2026-10-16: planners (ReWOO et al.) need this to size a
+        plan to what the budget can actually afford. Previously they
+        reached into consumed counts with ad-hoc formulas.
+        """
+        return max(0, self._config.max_steps - self.steps)
+
     def snapshot(self) -> BudgetSnapshot:
         return BudgetSnapshot(
             input_tokens=self.input_tokens,

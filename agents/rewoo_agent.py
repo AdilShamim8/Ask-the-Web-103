@@ -131,11 +131,19 @@ class ReWOOAgent(BaseAgent):
 
             # ── Phase 1: PLAN ────────────────────────────────────────
             plan_steps = await self._plan(query)
-            # Clamp plan size to the remaining step budget.
-            max_affordable = max(1, self._budget.steps + 2)  # planner+solver
-            if len(plan_steps) > _MAX_STEPS:
-                plan_steps = plan_steps[:_MAX_STEPS]
-                log.warning("rewoo.plan_truncated", cap=_MAX_STEPS)
+            # Clamp plan size to what the budget can actually afford.
+            # The plan step is already consumed; SOLVE will consume one
+            # more, so reserve it. Both invariants apply: the hard cap
+            # (_MAX_STEPS) and the remaining step budget.
+            # Fixed 2026-10-16: the affordability bound used to be
+            # computed and then dropped on the floor (F841) — the clamp
+            # only ever saw _MAX_STEPS, so a plan could legally exhaust
+            # the budget and blow up later in SOLVE.
+            affordable = max(1, self._budget.steps_remaining - 1)  # -1: SOLVE
+            cap = min(_MAX_STEPS, affordable)
+            if len(plan_steps) > cap:
+                plan_steps = plan_steps[:cap]
+                log.warning("rewoo.plan_truncated", cap=cap, budget_cap=affordable)
             log.info("rewoo.planned", num_steps=len(plan_steps))
             state.iterations += 1
 
