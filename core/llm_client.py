@@ -130,14 +130,22 @@ class LLMClient:
             try:
                 breaker = self._breakers.get_or_create(f"llm:{candidate.value}")
 
-                async def _call() -> Message:
-                    if candidate == LLMProvider.OPENAI:
+                # Bind the loop variables by value (default args): a
+                # closure over `candidate`/`client` would keep live
+                # references that a later refactor (hedged requests,
+                # gather across candidates) would silently re-bind to
+                # the WRONG provider. B023-class footgun.
+                async def _call(
+                    _provider: LLMProvider = candidate,
+                    _client: Any = client,
+                ) -> Message:
+                    if _provider == LLMProvider.OPENAI:
                         return await self._openai_complete(
-                            client, messages, tools, chosen_model,
+                            _client, messages, tools, chosen_model,
                             temperature, max_tokens, tracker,
                         )
                     return await self._anthropic_complete(
-                        client, messages, tools, chosen_model,
+                        _client, messages, tools, chosen_model,
                         temperature, max_tokens, tracker,
                     )
 
