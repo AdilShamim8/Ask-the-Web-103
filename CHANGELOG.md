@@ -4,6 +4,47 @@ All notable changes to Ask-the-Web are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [SemVer](https://semver.org/).
 
+## [2.0.1] — 2026-10-16
+
+Patch release: full CI/CD green-wall restoration plus a self-found
+bug sweep (14 fixes). Every check that was red at v2.0.0 is green.
+
+### Fixed — Build & CI (the five red checks)
+- **Packaging**: hatchling could not discover any package — every
+  `pip install` (CI typecheck/tests, Docker builder) died at
+  metadata generation. `[tool.hatch.build.targets.wheel]` now ships
+  the seven real top-level packages.
+- **Docker build**: LICENSE was dockerignored while pyproject
+  requires it; the builder needed stub packages present; [dev] extras
+  no longer ship to production.
+- **trivy**: build/install tooling (venv-seeded setuptools/wheel,
+  pip-vendored urllib3/msgpack, ensurepip bundles) purged from the
+  runtime image; secret-scanner false positives dropped
+  (scanners: vuln); the purge is version-agnostic for base bumps.
+
+### Fixed — Code (self-found)
+- openai SDK v3 removed `text_stream` — streaming answers were dead
+  (AttributeError on every call); rewritten on the chunked transport.
+- SecretStr fields had bare str defaults — unset env vars surfaced
+  raw strs and crashed `.get_secret_value()`.
+- Playwright driver subprocess leaked whenever browser launch failed.
+- Playwright browsers installed as root were unreadable by appuser —
+  scraping was silently dead in the published image.
+- ReWOO's budget clamp was dead code (F841); now sizes plans to the
+  remaining step budget.
+- B023 late-binding closures in both provider fallback chains;
+  B905 silent zip misalignment in fan-outs; F821 unresolved
+  annotations in the MCP client.
+- Blind `pytest.raises(Exception)` hid that a test never ran its
+  code under test (deprecated event-loop API raised first).
+- Version strings unified to `core.__version__` (schemas had drifted
+  to a hardcoded '2.0').
+
+### Changed
+- CI typecheck promoted from `continue-on-error` to a hard gate:
+  mypy reports zero findings across 55 source files.
+- StrEnum migration: `str(member)` now matches on py3.11 AND py3.12.
+
 ## [2.0.0] — 2026-10-16
 
 The production re-architecture: same course lineage, production spine.

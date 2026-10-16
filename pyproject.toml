@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ask-the-web-agent"
-version = "2.0.0"
+version = "2.0.1"
 description = "A production-grade, Perplexity-like Ask-the-Web Agent — ReACT, ReWOO, Reflexion, Tree Search, MCP, A2A, budgets, and graceful degradation"
 readme = "README.md"
 requires-python = ">=3.11"
