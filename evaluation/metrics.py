@@ -71,6 +71,39 @@ class TextMetrics:
             r"#{1,3}\s*sources?\s*\n", answer, re.IGNORECASE
         ))
 
+    # ── Grounding metrics (production additions) ──────────────────────
+    # citation_coverage measures recall: of sources given, how many are
+    # cited. The failure that actually burns users is the INVERSE: the
+    # answer cites things that don't exist (fabricated citations).
+    # That's precision.
+
+    _CITATION_RE = re.compile(r"\[(?:source\s+)?(\d+)\]", re.IGNORECASE)
+    _URL_RE = re.compile(r"https?://[^\s\)\]\>]+")
+
+    @staticmethod
+    def citation_precision(answer: str, sources: list[dict[str, str]]) -> float:
+        """
+        Fraction of citation markers in the answer that point to a REAL
+        source. [1] with fewer than 1 sources = fabricated → 0.0.
+        """
+        markers = TextMetrics._CITATION_RE.findall(answer)
+        if not markers:
+            # Bare URLs count as citations too.
+            urls = TextMetrics._URL_RE.findall(answer)
+            if not urls:
+                return 1.0  # nothing cited, nothing fabricated
+            known = {s.get("url", "") for s in sources}
+            hits = sum(1 for u in urls if u.rstrip("/.") in known)
+            return hits / len(urls) if urls else 1.0
+
+        valid = sum(1 for n in markers if 1 <= int(n) <= len(sources))
+        return valid / len(markers)
+
+    @staticmethod
+    def unsupported_citation_rate(answer: str, sources: list[dict[str, str]]) -> float:
+        """Complement of citation_precision — the fabrication rate."""
+        return round(1.0 - TextMetrics.citation_precision(answer, sources), 3)
+
     @staticmethod
     def compute_all(
         answer: str,
@@ -78,6 +111,10 @@ class TextMetrics:
     ) -> dict[str, float]:
         return {
             "citation_coverage": TextMetrics.citation_coverage(answer, sources),
+            "citation_precision": TextMetrics.citation_precision(answer, sources),
+            "unsupported_citation_rate": TextMetrics.unsupported_citation_rate(
+                answer, sources
+            ),
             "length_score": TextMetrics.answer_length_score(answer),
             "structure_score": TextMetrics.has_structure(answer),
             "has_sources_section": float(TextMetrics.sources_section_present(answer)),
