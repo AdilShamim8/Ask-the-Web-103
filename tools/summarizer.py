@@ -17,6 +17,9 @@ class TextSummarizerTool(BaseTool):
     For production, swap _extractive_summarize with an LLM call.
     """
 
+    timeout_s = 5.0
+    cost_hint = "cheap"
+
     @property
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
@@ -45,6 +48,13 @@ class TextSummarizerTool(BaseTool):
     async def execute(
         self, text: str, max_sentences: int = 5, **_: Any
     ) -> str:
+        # Input cap: summarizing multi-MB payloads is a latency and memory
+        # hazard (FM-09/FM-11) — the executor caps results, but the INPUT
+        # arrives from the LLM and can be arbitrarily large.
+        if len(text) > 100_000:
+            text = text[:100_000]
+        max_sentences = max(1, min(20, max_sentences))  # clamp 1..20
+
         sentences = [s.strip() for s in text.replace("\n", " ").split(".") if s.strip()]
 
         if len(sentences) <= max_sentences:
