@@ -12,12 +12,16 @@ from tools.base_tool import BaseTool, ToolDefinition
 
 logger = structlog.get_logger(__name__)
 
-# Allowed AST node types for safe eval
+# Allowed AST node types for safe eval.
+# NOTE: ast.Load / ast.Store are expression CONTEXTS that appear in every
+# name reference on Python 3.12+ — they must be allowlisted or every
+# function-call expression is rejected (latent bug on modern Python,
+# found by the test suite 2026-10-16).
 _ALLOWED_NODES = (
     ast.Expression, ast.BinOp, ast.UnaryOp, ast.Constant,
     ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow,
     ast.FloorDiv, ast.Mod, ast.USub, ast.UAdd,
-    ast.Call, ast.Name,
+    ast.Call, ast.Name, ast.Load, ast.Store,
 )
 
 _SAFE_NAMES = {
