@@ -33,6 +33,7 @@ from core.exceptions import MCPError
 from core.resilience import BreakerRegistry, retry_with_jitter
 from tools.base_tool import BaseTool, ToolDefinition
 from tools.http_client import get_http_client
+from tools.tool_registry import ToolRegistry
 
 logger = structlog.get_logger(__name__)
 
@@ -248,8 +249,11 @@ class MCPRegistry:
         self,
         base_registry: ToolRegistry | None = None,
     ) -> ToolRegistry:
-        from tools.tool_registry import ToolRegistry  # avoid circular import
-
+        # ToolRegistry is imported at module level (no cycle exists:
+        # tool_registry imports only core + base_tool). The old
+        # function-local "avoid circular import" import was invisible
+        # to static analysis, leaving the annotations above flagged as
+        # undefined names (F821). Fixed 2026-10-16.
         registry = base_registry or ToolRegistry()
 
         async def _load_server(config: MCPServerConfig) -> None:
