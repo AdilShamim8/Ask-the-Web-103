@@ -1,18 +1,31 @@
+"""
+Token counting and context management.
+
+Performance notes (FMEA FM-11):
+* tiktoken encoding runs on CPU (µs–ms per KB). It stays on the hot path
+  only for count_messages/trim; the encoder object is cached per model at
+  class level so we pay construction once.
+* ``count_tokens`` of very large texts (rare — e.g., full page dumps) is
+  CPU-bound; call sites that handle untrusted sizes use the estimator
+  instead of the exact counter.
+"""
+
 from __future__ import annotations
+
+import json
 
 import tiktoken
 
 from core.message_types import Message, Role
 
-# Approximate tokens per image (for future multimodal support)
 _IMAGE_TOKEN_ESTIMATE = 765
+
+# Fallback ratio: chars per token for cl100k-ish tokenizers on English+code.
+_CHARS_PER_TOKEN_ESTIMATE = 4
 
 
 class TokenCounter:
-    """
-    Counts tokens for OpenAI-compatible models.
-    Falls back to character-based estimation for Anthropic.
-    """
+    """Counts tokens for OpenAI-compatible models; estimates otherwise."""
 
     _encoders: dict[str, tiktoken.Encoding] = {}
 
@@ -31,30 +44,33 @@ class TokenCounter:
         return len(enc.encode(text))
 
     @classmethod
+    def estimate_tokens(cls, text: str) -> int:
+        """Cheap character-based estimate — for budget pre-checks on
+        untrusted/large payloads where exact counting costs more than the
+        decision it informs."""
+        return max(1, len(text) // _CHARS_PER_TOKEN_ESTIMATE)
+
+    @classmethod
     def count_messages(cls, messages: list[Message], model: str = "gpt-4o") -> int:
-        """
-        Counts tokens across a message list using OpenAI's per-message overhead.
-        Reference: https://platform.openai.com/docs/guides/chat/managing-tokens
-        """
+        """Token count across a message list (OpenAI framing overhead)."""
         enc = cls._get_encoder(model)
-        tokens_per_message = 3  # every message has role + content framing
-        tokens_per_name = 1
+        tokens_per_message = 3
         total = 0
 
         for msg in messages:
             total += tokens_per_message
-
-            content = msg.content or ""
-            total += len(enc.encode(content))
+            total += len(enc.encode(msg.content or ""))
 
             if msg.tool_calls:
-                import json
                 for tc in msg.tool_calls:
                     total += len(enc.encode(tc.name))
                     total += len(enc.encode(json.dumps(tc.arguments)))
 
-        total += 3  # reply priming
-        return total
+            if msg.tool_results:
+                for tr in msg.tool_results:
+                    total += len(enc.encode(tr.content))
+
+        return total + 3  # reply priming
 
     @classmethod
     def fits_in_context(
@@ -77,19 +93,27 @@ class TokenCounter:
         keep_system: bool = True,
     ) -> list[Message]:
         """
-        Trim oldest non-system messages until the history fits in context.
-        Always preserves system message and the latest user message.
+        Trim oldest non-system messages until history fits.
+        Preserves system messages and the latest user message.
+
+        Correctness note: this preserves ORDER of the remaining messages
+        (system first, then chronological) — trimming never reorders.
         """
         if cls.fits_in_context(messages, model, context_limit, reserved_for_response):
             return messages
 
         system_msgs = [m for m in messages if m.role == Role.SYSTEM]
         non_system = [m for m in messages if m.role != Role.SYSTEM]
+        latest_user = next(
+            (m for m in reversed(non_system) if m.role == Role.USER), None
+        )
 
-        # Keep trimming from the front of non-system messages
         while non_system and not cls.fits_in_context(
             system_msgs + non_system, model, context_limit, reserved_for_response
         ):
+            # Never drop the latest user message — agents spiral without it.
+            if len(non_system) == 1 and non_system[0] is latest_user:
+                break
             non_system.pop(0)
 
         return system_msgs + non_system
