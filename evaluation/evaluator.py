@@ -155,6 +155,7 @@ class AnswerEvaluator:
             model=self._model,
             temperature=0.0,
             max_tokens=512,
+            fast=True,  # evaluation is a rubric, not prose — cheap tier
         )
 
         raw = (response.content or "").strip()
