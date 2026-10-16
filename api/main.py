@@ -85,16 +85,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("app.tools_ready", tools=registry.names())
 
     # ── Optional Playwright warm-up (scraper fallback) ────────────────
+    # Fixed 2026-10-16: the old code did async_playwright().start() and,
+    # if chromium.launch() then failed, only nulled the state — the
+    # driver SUBPROCESS behind the started Playwright object was never
+    # stop()ed, leaking a process + pipes until the loop was torn down
+    # ("Event loop is closed" in BaseSubprocessTransport.__del__, seen
+    # as PytestUnraisableExceptionWarning). The driver is now stopped
+    # on launch failure, and state is only published on full success.
+    app.state.playwright = None
+    app.state.browser = None
     try:
         from playwright.async_api import async_playwright
 
-        app.state.playwright = await async_playwright().start()
-        app.state.browser = await app.state.playwright.chromium.launch(headless=True)
-        logger.info("playwright.ready")
+        pw = await async_playwright().start()
+        try:
+            app.state.browser = await pw.chromium.launch(headless=True)
+        except Exception as exc:
+            with contextlib.suppress(Exception):
+                await pw.stop()
+            logger.warning(
+                "playwright.launch_failed", error=str(exc)[:150]
+            )
+        else:
+            app.state.playwright = pw
+            logger.info("playwright.ready")
     except Exception as exc:
         logger.warning("playwright.unavailable", error=str(exc)[:150])
-        app.state.playwright = None
-        app.state.browser = None
 
     yield  # ── application runs here ──────────────────────────────────
 
