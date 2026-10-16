@@ -1,0 +1,62 @@
+# Security pipeline: dependency CVEs, secret leaks, image scan.
+# High/critical findings block the merge (SECURITY.md policy).
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"   # weekly Monday re-scan of default branch
+
+jobs:
+  dependency-audit:
+    name: pip-audit (dependency CVEs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Extract dependencies and audit
+        run: |
+          python - <<'EOF' > requirements-audit.txt
+          import tomllib
+          deps = tomllib.load(open("pyproject.toml","rb"))["project"]["dependencies"]
+          print("\n".join(deps))
+          EOF
+          pip-audit --requirement requirements-audit.txt || {
+            echo "::error::Dependency audit found vulnerabilities"
+            exit 1
+          }
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-scan:
+    name: Image vulnerability scan (trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --target runtime -t ask-web-scan:tmp .
+      - name: Trivy scan (HIGH/CRITICAL block)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ask-web-scan:tmp
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
