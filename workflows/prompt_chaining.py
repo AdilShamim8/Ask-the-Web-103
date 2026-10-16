@@ -1,17 +1,33 @@
+"""
+Prompt Chaining Workflow — deterministic multi-step pipelines.
+
+Pattern: each step formats a prompt from prior outputs, calls the LLM,
+and stores its result under ``output_key``. Fixed topology, predictable
+cost — the most debuggable workflow shape.
+
+Production hardening:
+* Every LLM call runs through the request budget (ADR-005) and the fast
+  model tier by default — chains are usually internal plumbing, not
+  user-facing prose.
+* Step failures fail fast with the step name in the error (no silent
+  propagation of KeyError garbage).
+* ``stop_if`` predicates allow early exit (e.g., skip synthesis when the
+  chain already produced a confident answer).
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable
+import json
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable
 
 import structlog
 
+from core.budgets import BudgetManager
 from core.llm_client import LLMClient
 from core.message_types import Message, Role
 
 logger = structlog.get_logger(__name__)
-
-# A step is an async function that takes context and returns updated context
-StepFn = Callable[[dict[str, Any], LLMClient], Awaitable[dict[str, Any]]]
 
 
 @dataclass
@@ -22,27 +38,29 @@ class ChainStep:
     temperature: float = 0.0
     max_tokens: int = 1024
     transform: Callable[[str], Any] | None = None
+    stop_if: Callable[[dict[str, Any]], bool] | None = None
 
 
 class PromptChain:
     """
     Prompt Chaining Workflow.
 
-    Each step:
-        1. Formats its prompt using the context (outputs from prior steps)
-        2. Calls the LLM
-        3. Stores its output in the context under `output_key`
-
     Example usage for Ask-the-Web:
         Step 1: Identify key entities in the query
         Step 2: Generate optimized search queries for those entities
-        Step 3: Summarize search results
-        Step 4: Draft the final answer
+        Step 3: (search happens externally) → Step 4: Draft the final answer
     """
 
-    def __init__(self, llm_client: LLMClient, model: str | None = None) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        model: str | None = None,
+        *,
+        budget: BudgetManager | None = None,
+    ) -> None:
         self._llm = llm_client
         self._model = model
+        self._budget = budget
         self._steps: list[ChainStep] = []
 
     def add_step(self, step: ChainStep) -> "PromptChain":
@@ -54,6 +72,13 @@ class PromptChain:
         logger.info("prompt_chain.start", num_steps=len(self._steps))
 
         for i, step in enumerate(self._steps, 1):
+            if step.stop_if and step.stop_if(context):
+                logger.info("prompt_chain.early_exit", step=step.name, n=i)
+                break
+
+            if self._budget is not None:
+                self._budget.consume_step()
+
             logger.debug("prompt_chain.step", n=i, name=step.name)
 
             try:
@@ -68,6 +93,8 @@ class PromptChain:
                 model=self._model,
                 temperature=step.temperature,
                 max_tokens=step.max_tokens,
+                fast=True,  # chains are internal plumbing — cheap tier
+                budget=self._budget,
             )
 
             raw = response.content or ""
@@ -85,23 +112,29 @@ class PromptChain:
         return context
 
 
-def build_search_chain(llm_client: LLMClient, model: str | None = None) -> PromptChain:
+def build_search_chain(
+    llm_client: LLMClient,
+    model: str | None = None,
+    budget: BudgetManager | None = None,
+) -> PromptChain:
     """
     Pre-built chain for the Ask-the-Web use case:
-    query → search queries → (search happens externally) → final answer
+    query → intent analysis → search queries (search itself happens in
+    the agent layer, which owns tool budgets).
     """
-    import json
-
     def parse_queries(text: str) -> list[str]:
         text = text.strip()
         if text.startswith("["):
             try:
-                return json.loads(text)
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [str(q) for q in parsed][:5]
             except json.JSONDecodeError:
                 pass
-        return [line.strip("- ").strip() for line in text.splitlines() if line.strip()]
+        return [line.strip("- ").strip() for line in text.splitlines()
+                if line.strip()][:5]
 
-    chain = PromptChain(llm_client, model)
+    chain = PromptChain(llm_client, model, budget=budget)
 
     chain.add_step(ChainStep(
         name="identify_intent",
