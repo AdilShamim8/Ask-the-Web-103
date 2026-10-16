@@ -179,8 +179,10 @@ class TestWebSearchTool:
 
 # ── Web Scraper ───────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 class TestWebScraperTool:
+    # NOTE: no class-level @pytest.mark.asyncio — it leaked onto the sync
+    # test_parse_html_extracts_text below (PytestWarning), and asyncio_mode=auto
+    # already covers the async tests. Fixed 2026-10-16.
     async def test_blocked_domain(self) -> None:
         tool = WebScraperTool()
         result = await tool.execute(url="https://facebook.com/some/page")
