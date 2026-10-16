@@ -1,0 +1,54 @@
+# Dependabot — automated dependency updates
+# Keeps runtime dependencies fresh and surfaces CVEs as PRs.
+# Docs: https://docs.github.com/en/code-security/dependabot
+
+version: 2
+
+updates:
+  # Python application dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Dhaka"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      # Batch low-risk patch/minor bumps into a single PR to avoid noise.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    # Major version bumps get their own PR — they need human review.
+    # Security fixes always arrive as individual, prioritized PRs.
+    reviewers:
+      - "AdilShamim8"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+
+  # GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Dockerfile base image
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
