@@ -51,7 +51,23 @@ class A2ATaskStore:
         self._prefix = prefix
 
     async def set(self, task_id: str, payload: dict[str, Any]) -> None:
-        raw = json.dumps(payload)[:_MAX_RESULT_BYTES]
+        # Cap the PAYLOAD, not the serialized string — truncating the
+        # string mid-JSON would make every subsequent read unparseable.
+        raw = json.dumps(payload)
+        if len(raw) > _MAX_RESULT_BYTES:
+            logger.warning(
+                "a2a_server.result_capped",
+                task_id=task_id, original_bytes=len(raw),
+            )
+            payload = {
+                "task_id": payload.get("task_id", task_id),
+                "status": payload.get("status"),
+                "error": "result exceeded size cap and was truncated",
+                "output": {},
+                "elapsed_s": payload.get("elapsed_s", 0.0),
+            }
+            raw = json.dumps(payload)
+
         if self._redis is not None:
             await self._redis.set(f"{self._prefix}{task_id}", raw, ex=_TASK_TTL_S)
         else:
