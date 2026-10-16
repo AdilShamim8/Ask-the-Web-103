@@ -37,13 +37,15 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
-# NOTE (fixed 2026-10-16): strip the BASE image's system site-packages.
-# The app runs exclusively from /opt/venv — the system python's packages
-# (setuptools 70.3.0, wheel 0.45.1, jaraco.context, msgpack …) are pure
-# attack surface: trivy flagged four HIGH CVEs in them, none reachable
-# by the app. Removing them also drops the pip entry points, so the
-# production image has no package installer at all.
-RUN rm -rf /usr/local/lib/python3.11/site-packages/* /usr/local/bin/pip*
+# NOTE (fixed 2026-10-16): strip the BASE image's system python
+# tooling. The app runs exclusively from /opt/venv — the system
+# python's packages (setuptools 70.3.0, wheel 0.45.1, jaraco.context,
+# msgpack …) are pure attack surface: trivy flagged four HIGH CVEs in
+# them, none reachable by the app. ensurepip goes too — its bundled
+# wheels are what seeds stale setuptools/wheel into every new venv.
+RUN rm -rf /usr/local/lib/python3.11/site-packages \
+           /usr/local/lib/python3.11/ensurepip \
+    && rm -f /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.11
 
 # Runtime system deps.
 # NOTE (fixed 2026-10-16): curl is now installed in the RUNTIME stage —
@@ -78,6 +80,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Virtual env from builder (no build toolchain ships to runtime)
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+
+# NOTE (fixed 2026-10-16): purge BUILD/INSTALL TOOLING from the runtime
+# venv. `python -m venv` on 3.11 seeds setuptools 70.3.0 + wheel 0.45.1
+# from the base image's ensurepip bundles, and pip 26.2.1 vendors
+# urllib3 2.7.0 + msgpack 1.1.2 — trivy flags all four as HIGH CVEs.
+# None of it is importable by the app (verified: zero references across
+# core/configs/tools/agents/workflows/api/evaluation); a production
+# image has no business carrying a package installer or build backend.
+RUN rm -rf /opt/venv/lib/python3.11/site-packages/pip \
+           /opt/venv/lib/python3.11/site-packages/pip-*.dist-info \
+           /opt/venv/lib/python3.11/site-packages/setuptools \
+           /opt/venv/lib/python3.11/site-packages/setuptools-*.dist-info \
+           /opt/venv/lib/python3.11/site-packages/pkg_resources \
+           /opt/venv/lib/python3.11/site-packages/_distutils_hack \
+           /opt/venv/lib/python3.11/site-packages/wheel \
+           /opt/venv/lib/python3.11/site-packages/wheel-*.dist-info \
+           /opt/venv/bin/pip /opt/venv/bin/pip3 /opt/venv/bin/pip3.11 \
+           /opt/venv/bin/wheel
 
 # Playwright browsers (fixed 2026-10-16):
 # browsers are installed to /opt/ms-playwright — a world-readable path.
