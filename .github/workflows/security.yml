@@ -58,5 +58,11 @@ jobs:
         with:
           image-ref: ask-web-scan:tmp
           severity: HIGH,CRITICAL
+          # CVEs only (fixed 2026-10-16): the default secret scanner
+          # false-positived 'Google (gcp-service-account)' patterns out
+          # of third-party JS shipped inside the image — 9 CRITICAL
+          # phantom findings that can never be fixed from this repo.
+          # Repo secrets are gitleaks' job (job above).
+          scanners: vuln
           exit-code: "1"
           ignore-unfixed: true

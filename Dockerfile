@@ -37,6 +37,14 @@ FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
+# NOTE (fixed 2026-10-16): strip the BASE image's system site-packages.
+# The app runs exclusively from /opt/venv — the system python's packages
+# (setuptools 70.3.0, wheel 0.45.1, jaraco.context, msgpack …) are pure
+# attack surface: trivy flagged four HIGH CVEs in them, none reachable
+# by the app. Removing them also drops the pip entry points, so the
+# production image has no package installer at all.
+RUN rm -rf /usr/local/lib/python3.11/site-packages/* /usr/local/bin/pip*
+
 # Runtime system deps.
 # NOTE (fixed 2026-10-16): curl is now installed in the RUNTIME stage —
 # the previous image's HEALTHCHECK invoked curl that only existed in the

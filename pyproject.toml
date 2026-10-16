@@ -21,6 +21,10 @@ dependencies = [
     # HTTP
     "httpx>=0.27.0",
     "aiohttp>=3.9.0",
+    # Security floor (fixed 2026-10-16): trivy flagged CVE-2026-97687 /
+    # CVE-2026-97689 in urllib3 2.7.0. The resolver picked 2.8.0 anyway,
+    # but an explicit floor protects against future resolver regressions.
+    "urllib3>=2.8.0",
     # Scraping
     "playwright>=1.44.0",
     "beautifulsoup4>=4.12.0",
