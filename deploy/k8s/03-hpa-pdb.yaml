@@ -1,0 +1,81 @@
+# Autoscaling and disruption budgets.
+# HPA signals: CPU (proxy for LLM-serialization work) AND a custom
+# in-flight-request metric when available. Scale bounds are the launch
+# tier from capacity-planning §4 (min 3 → max 40 pods); raise via a
+# reviewed PR with the capacity doc updated, not by editing live.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ask-web-api
+  namespace: ask-web
+  labels:
+    app.kubernetes.io/name: ask-the-web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ask-web-api
+  minReplicas: 3
+  maxReplicas: 40
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30      # react fast to bursts
+      policies:
+        - type: Percent
+          value: 100                       # double capacity per action
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300     # slow scale-down: avoid flap
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+---
+# PDB: node drains / cluster upgrades must never take the API to zero.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ask-web-api
+  namespace: ask-web
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ask-the-web
+      app.kubernetes.io/component: api
+---
+# NetworkPolicy: the API talks to the world (search/LLM/web) and to
+# Redis. Redis accepts ONLY the API. Default-deny everything else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-allow-api-only
+  namespace: ask-web
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ask-the-web
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 6379
