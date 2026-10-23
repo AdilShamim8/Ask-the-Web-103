@@ -71,7 +71,7 @@ jobs:
         run: pytest tests/ -v --cov=core --cov=tools --cov=workflows --cov=agents --cov=api --cov-report=term-missing --cov-fail-under=50
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: .coverage
